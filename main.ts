@@ -1,4 +1,3 @@
-//% color="#0000FF"
 namespace Mindstorms {
 
     export enum ServoAdresse {
@@ -25,7 +24,8 @@ namespace Mindstorms {
     //% position.min=0 position.max=180
     export function servoBewegen(adresse: ServoAdresse, position: number) {
         // I²C-Adresse des Controllers
-        let i2cAdresse = 0x08
+        let i2cAdresse = adresse
+
 
         // Buffer mit 1 Byte: [Position]
         let buffer = pins.createBuffer(1)

@@ -1,5 +1,6 @@
 namespace Mindstorms {
 
+    //SERVO
     export enum ServoAdresse {
         //% block="Servo_1"
         Servo1 = 0x08,
@@ -18,20 +19,37 @@ namespace Mindstorms {
         //% block="Servo_8"
         Servo8 = 0x7B,
     }
-
     //% block="Bewege %adresse auf %position Grad"
     //% adresse.defl=ServoAdresse.Servo1
     //% position.min=0 position.max=180
     export function servoBewegen(adresse: ServoAdresse, position: number) {
-        // I²C-Adresse des Controllers
-        let i2cAdresse = adresse
-
 
         // Buffer mit 1 Byte: [Position]
         let buffer = pins.createBuffer(1)
         buffer[0] = position
 
         // Senden über I²C
-        pins.i2cWriteBuffer(i2cAdresse, buffer)
+        pins.i2cWriteBuffer(adresse, buffer)
     }
+    //SERVO
+
+
+    //TASTER
+    export enum TasterAdresse {
+        //% block="Taster_1"
+        Taster1 = 0x17,
+        //% block="Taster_2"
+        Taster2 = 0x08,
+
+    }
+    //% block="Lese %adresse aus"
+    //% adresse.defl=TasterAdresse.Taster1
+    export function Taster_Abfrage(adresse: TasterAdresse) : Boolean {
+        let zustand = pins.i2cReadNumber(adresse, NumberFormat.UInt8BE)
+        return zustand
+    }
+    //TASTER
+
 }
+
+

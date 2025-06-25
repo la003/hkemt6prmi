@@ -40,16 +40,13 @@ namespace Mindstorms {
         Taster1 = 0x17,
         //% block="Taster_2"
         Taster2 = 0x08,
-
     }
     //% block="Lese %adresse aus"
     //% adresse.defl=TasterAdresse.Taster1
-    export function Taster_Abfrage(adresse: TasterAdresse) : Boolean {
+    export function Taster_Abfrage(adresse: TasterAdresse): Boolean {
         let zustand = pins.i2cReadNumber(adresse, NumberFormat.UInt8BE)
         return zustand
     }
     //TASTER
 
 }
-
-

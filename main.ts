@@ -49,4 +49,31 @@ namespace Mindstorms {
     }
     //TASTER
 
+    //Ultraschallsensor
+    export enum UltraschallsensorAdresse {
+        //% block="Ultraschallsensor_1"
+        Ultraschallsensor1 = 0x08,
+        //% block="Ultraschallsensor_2"
+        Ultraschallsensor2 = 0x18,
+        //% block="Ultraschallsensor_3"
+        Ultraschallsensor3 = 0x28,
+        //% block="Ultraschallsensor_4"
+        Ultraschallsensor4 = 0x38,
+        //% block="Ultraschallsensor_5"
+        Ultraschallsensor5 = 0x48,
+        //% block="Ultraschallsensor_6"
+        Ultraschallsensor6 = 0x58,
+        //% block="Ultraschallsensor_7"
+        Ultraschallsensor7 = 0x68,
+        //% block="Ultraschallsensor_8"
+        Ultraschallsensor8 = 0x78,
+    }
+    //% block="Abstand %adresse in cm"
+    //% adresse.defl=UltraschallsensorAdresse.Ultraschallsensor1
+    export function Ultraschallsensor_Wert(adresse: UltraschallsensorAdresse): Number {
+        let Wert = pins.i2cReadNumber(adresse, NumberFormat.UInt8BE)
+        return Wert
+    }
+    //Ultraschallsensor
+
 }

@@ -70,7 +70,7 @@ namespace Mindstorms {
     }
     //% block="Abstand %adresse in cm"
     //% adresse.defl=UltraschallsensorAdresse.Ultraschallsensor1
-    export function Ultraschallsensor_Wert(adresse: UltraschallsensorAdresse): Number {
+    export function Ultraschallsensor_Wert(adresse: UltraschallsensorAdresse): number {
         let Wert = pins.i2cReadNumber(adresse, NumberFormat.UInt8BE)
         return Wert
     }

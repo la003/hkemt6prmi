@@ -37,9 +37,9 @@ namespace Mindstorms {
     //TASTER
     export enum TasterAdresse {
         //% block="Taster_1"
-        Taster1 = 0x17,
+        Taster1 = 0x07,
         //% block="Taster_2"
-        Taster2 = 0x08,
+        Taster2 = 0x17,
     }
     //% block="Lese %adresse aus"
     //% adresse.defl=TasterAdresse.Taster1

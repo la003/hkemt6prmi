@@ -1,6 +1,6 @@
 {
-    "name": "Projekt HKEMT6PrMi",
-    "description": "Eine Extension für die Open Source Lösung zum Programmieren Lernen für Privatpersonen",
+    "name": "HKEMT6PrMi",
+    "description": "",
     "dependencies": {
         "core": "*",
         "radio": "*",

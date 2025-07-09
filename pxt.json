@@ -21,7 +21,5 @@
     "supportedTargets": [
         "microbit"
     ],
-    "preferredEditor": "tsprj"
-    
-    "icon": "https://raw.githubusercontent.com/la003/hkemt6prmi/master/Vorschaubild.png"
+    "preferredEditor": "tsprj"    
 }

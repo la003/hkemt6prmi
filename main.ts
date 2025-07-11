@@ -1,4 +1,4 @@
-namespace Mindstorms {
+namespace HKEMT6PrMi {
 
     //SERVO
     export enum ServoAdresse {

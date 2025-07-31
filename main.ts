@@ -109,11 +109,11 @@ namespace HKEMT6PrMi {
     }
     export enum GleichstrommotorZustand {
         //% block="Stop"
-        GleichstrommotorStop = 1,
+        GleichstrommotorStop = 0,
         //% block="Vorwärts"
         GleichstrommotorForward = 1,
         //% block="Rückwärts"
-        GleichstrommotorBackward = 1,
+        GleichstrommotorBackward = 2,
     }
     //% block="%adresse %zustand mit %drehzahl RPM"
     //% adresse.defl=GleichstrommotorAdresse.Gleichstrommotor1
@@ -132,10 +132,58 @@ namespace HKEMT6PrMi {
     //GLEICHSTROMMOTOR
 
     //SCHRITTMOTOR
-
+    export enum SchrittmotorAdresse {
+        //% block="Schrittmotor_1"
+        Schrittmotor1 = 0x0D,
+        //% block="Schrittmotor_2"
+        Schrittmotor2 = 0x1D,
+        //% block="Schrittmotor_3"
+        Schrittmotor3 = 0x2D,
+        //% block="Schrittmotor_4"
+        Schrittmotor4 = 0x3D,
+        //% block="Schrittmotor_5"
+        Schrittmotor5 = 0x4D,
+        //% block="Schrittmotor_6"
+        Schrittmotor6 = 0x5D,
+        //% block="Schrittmotor_7"
+        Schrittmotor7 = 0x6D,
+        //% block="Schrittmotor_8"
+        Schrittmotor8 = 0x7D,
+    }
     //SCHRITTMOTOR
 
     //FARBSENSOR
-
+    export enum FarbsensorAdresse {
+        //% block="Farbsensor_1"
+        Farbsensor1 = 0x0A,
+        //% block="Farbsensor_2"
+        Farbsensor2 = 0x1A,
+        //% block="Farbsensor_3"
+        Farbsensor3 = 0x2A,
+        //% block="Farbsensor_4"
+        Farbsensor4 = 0x3A,
+        //% block="Farbsensor_5"
+        Farbsensor5 = 0x4A,
+        //% block="Farbsensor_6"
+        Farbsensor6 = 0x5A,
+        //% block="Farbsensor_7"
+        Farbsensor7 = 0x6A,
+        //% block="Farbsensor_8"
+        Farbsensor8 = 0x7A,
+    }
+    //% block="%adresse erkennt Farbe %farbe"
+    //% adresse.defl=Farbsensor.Farbsensor1
+    export function Farbsensor_Farberkennung(adresse: FarbsensorAdresse): string {
+        let Farbwert = pins.i2cReadNumber(adresse, NumberFormat.UInt16BE)
+        let Farbe = ""
+        if (Farbwert == 0) {Farbe = "Schwarz"}
+        else if (Farbwert > 0 && Farbwert <= 50) {Farbe = "Rot"}
+        else if (Farbwert > 50 && Farbwert <= 100) { Farbe = "Blau" }
+        else if (Farbwert > 100 && Farbwert <= 150) { Farbe = "Grün" }
+        else if (Farbwert > 150 && Farbwert <= 200) { Farbe = "Gelb" }
+        else if (Farbwert > 200 && Farbwert <= 255) { Farbe = "Weiß" }
+        else {Farbe = "Unbekannt"}
+        return Farbe
+    }
     //FARBSENSOR
 }

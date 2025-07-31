@@ -1,9 +1,9 @@
 namespace HKEMT6PrMi {
 
-    //SERVO
-    export enum ServoAdresse {
+    //SERVOMOTOR
+    export enum ServomotorAdresse {
         //% block="Servo_1"
-        Servo1 = 0x08,
+        Servo1 = 0x0B,
         //% block="Servo_2"
         Servo2 = 0x1B,
         //% block="Servo_3"
@@ -22,7 +22,7 @@ namespace HKEMT6PrMi {
     //% block="Bewege %adresse auf %position Grad"
     //% adresse.defl=ServoAdresse.Servo1
     //% position.min=0 position.max=180
-    export function servoBewegen(adresse: ServoAdresse, position: number) {
+    export function servoBewegen(adresse: ServomotorAdresse, position: number) {
 
         // Buffer mit 1 Byte: [Position]
         let buffer = pins.createBuffer(1)
@@ -31,7 +31,7 @@ namespace HKEMT6PrMi {
         // Senden über I²C
         pins.i2cWriteBuffer(adresse, buffer)
     }
-    //SERVO
+    //SERVOMOTOR
 
 
     //TASTER
@@ -40,8 +40,20 @@ namespace HKEMT6PrMi {
         Taster1 = 0x07,
         //% block="Taster_2"
         Taster2 = 0x17,
+        //% block="Taster_3"
+        Taster3 = 0x27,
+        //% block="Taster_4"
+        Taster4 = 0x37,
+        //% block="Taster_5"
+        Taster5 = 0x47,
+        //% block="Taster_6"
+        Taster6 = 0x57,
+        //% block="Taster_7"
+        Taster7 = 0x67,
+        //% block="Taster_8"
+        Taster8 = 0x77,
     }
-    //% block="Lese %adresse aus"
+    //% block="Zustand %adresse"
     //% adresse.defl=TasterAdresse.Taster1
     export function Taster_Abfrage(adresse: TasterAdresse): Boolean {
         let zustand = pins.i2cReadNumber(adresse, NumberFormat.UInt8BE)
@@ -76,4 +88,54 @@ namespace HKEMT6PrMi {
     }
     //Ultraschallsensor
 
+    //GLEICHSTROMMOTOR
+    export enum GleichstrommotorAdresse {
+        //% block="Gleichstrommotor_1"
+        Gleichstrommotor1 = 0x0C,
+        //% block="Gleichstrommotor_2"
+        Gleichstrommotor2 = 0x1C,
+        //% block="Gleichstrommotor_3"
+        Gleichstrommotor3 = 0x2C,
+        //% block="Gleichstrommotor_4"
+        Gleichstrommotor4 = 0x3C,
+        //% block="Gleichstrommotor_5"
+        Gleichstrommotor5 = 0x4C,
+        //% block="Gleichstrommotor_6"
+        Gleichstrommotor6 = 0x5C,
+        //% block="Gleichstrommotor_7"
+        Gleichstrommotor7 = 0x6C,
+        //% block="Gleichstrommotor_8"
+        Gleichstrommotor8 = 0x7C,
+    }
+    export enum GleichstrommotorZustand {
+        //% block="Stop"
+        GleichstrommotorStop = 1,
+        //% block="Vorwärts"
+        GleichstrommotorForward = 1,
+        //% block="Rückwärts"
+        GleichstrommotorBackward = 1,
+    }
+    //% block="%adresse %zustand mit %drehzahl RPM"
+    //% adresse.defl=GleichstrommotorAdresse.Gleichstrommotor1
+    //% zustand.defl=GleichstrommotorZustand.GleichstrommotorStop
+    //% drehzahl.min=0 drehzahl.max=360
+    export function GleichstrommotorBewegen(adresse: GleichstrommotorAdresse, zustand: GleichstrommotorZustand, drehzahl: number) {
+
+        // Buffer mit 2 Byte: [Zustand][Drehzahl]
+        let buffer = pins.createBuffer(2)
+        buffer[0] = zustand
+        buffer[1] = drehzahl
+
+        // Senden über I²C
+        pins.i2cWriteBuffer(adresse, buffer)
+    }
+    //GLEICHSTROMMOTOR
+
+    //SCHRITTMOTOR
+
+    //SCHRITTMOTOR
+
+    //FARBSENSOR
+
+    //FARBSENSOR
 }

@@ -1,7 +1,6 @@
 {
     "name": "HKEMT6PrMi",
     "description": "Hallo",
-    "icon": "https://github.com/la003/hkemt6prmi/blob/0f862f5e31b42449b1156830788b262ecb65952e/icon.png",
     "dependencies": {
         "core": "*",
         "radio": "*",

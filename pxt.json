@@ -1,7 +1,6 @@
 {
     "name": "HKEMT6PrMi",
     "description": "Kurze Beschreibung deiner Erweiterung",
-    "icon": "https://raw.githubusercontent.com/la003/hkemt6prmi/main/icon.png",
     "dependencies": {
         "core": "*",
         "radio": "*",

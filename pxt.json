@@ -13,6 +13,9 @@
         "README.md"
         "icon.png"
     ],
+    "icon": [
+        "icon.png"
+    ],
     "testFiles": [
         "test.ts"
     ],

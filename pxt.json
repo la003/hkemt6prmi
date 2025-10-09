@@ -1,6 +1,7 @@
 {
     "name": "HKEMT6PrMi",
-    "description": "",
+    "description": "Kurze Beschreibung deiner Erweiterung",
+    "icon": "icon.png",
     "dependencies": {
         "core": "*",
         "radio": "*",
@@ -10,6 +11,7 @@
         "main.blocks",
         "main.ts",
         "README.md"
+        "icon.png"
     ],
     "testFiles": [
         "test.ts"

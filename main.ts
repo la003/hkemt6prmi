@@ -185,5 +185,11 @@ namespace HKEMT6PrMi {
         else {Farbe = "Unbekannt"}
         return Farbe
     }
+    //% block="%adresse erkannter Wert %Farbwert"
+    //% adresse.defl=Farbsensor.Farbsensor1
+    export function Farbsensor_Farbwert(adresse: FarbsensorAdresse): number {
+        let Farbwert = pins.i2cReadNumber(adresse, NumberFormat.UInt16BE)
+        return Farbwert
+    }
     //FARBSENSOR
 }

@@ -294,220 +294,218 @@ namespace HKEMT6PrMi {
     }
 
     // --- Namespace & State ---
-    namespace APDS9960 {
-        let _wbuf = pins.createBuffer(2)
-        let _again = APDS9960_AGAIN.AGAIN_4X
-        let _pgain = APDS9960_PGAIN.PGAIN_4X
+    let _wbuf = pins.createBuffer(2)
+    let _again = APDS9960_AGAIN.AGAIN_4X
+    let _pgain = APDS9960_PGAIN.PGAIN_4X
 
-        // --- Low-level I2C helpers ---
-        function writeReg(reg: number, data: number): void {
-            // Beim APDS-9960 enthalten die Registeradressen bereits das Kommando-Bit (0x80),
-            // also KEIN zusätzliches OR mit 0x80/0xA0!
-            _wbuf[0] = reg
-            _wbuf[1] = data
-            pins.i2cWriteBuffer(APDS9960_I2C_ADDR, _wbuf)
+    // --- Low-level I2C helpers ---
+    function writeReg(reg: number, data: number): void {
+        // Beim APDS-9960 enthalten die Registeradressen bereits das Kommando-Bit (0x80),
+        // also KEIN zusätzliches OR mit 0x80/0xA0!
+        _wbuf[0] = reg
+        _wbuf[1] = data
+        pins.i2cWriteBuffer(APDS9960_I2C_ADDR, _wbuf)
+    }
+
+    function readReg(reg: number): number {
+        pins.i2cWriteNumber(APDS9960_I2C_ADDR, reg, NumberFormat.UInt8BE)
+        return pins.i2cReadNumber(APDS9960_I2C_ADDR, NumberFormat.UInt8BE)
+    }
+
+    function read16(regL: number): number {
+        // liest LSB, dann MSB → UInt16LE
+        pins.i2cWriteNumber(APDS9960_I2C_ADDR, regL, NumberFormat.UInt8BE)
+        return pins.i2cReadNumber(APDS9960_I2C_ADDR, NumberFormat.UInt16LE)
+    }
+
+    function readBlock(reg: number, len: number): Buffer {
+        pins.i2cWriteNumber(APDS9960_I2C_ADDR, reg, NumberFormat.UInt8BE)
+        return pins.i2cReadBuffer(APDS9960_I2C_ADDR, len)
+    }
+
+    // --- Power & Mode ---
+    //% block="APDS9960 Power On"
+    export function powerOn(): void {
+        let t = readReg(R_ENABLE)
+        t |= B_PON
+        writeReg(R_ENABLE, t)
+        basic.pause(3)
+    }
+
+    //% block="APDS9960 Power Off"
+    export function powerOff(): void {
+        let t = readReg(R_ENABLE)
+        t &= ~B_PON
+        writeReg(R_ENABLE, t)
+    }
+
+    //% block="ALS Enable $en"
+    export function alsEnable(en: boolean = true): void {
+        let t = readReg(R_ENABLE)
+        t = en ? (t | B_AEN) : (t & ~B_AEN)
+        writeReg(R_ENABLE, t)
+    }
+
+    //% block="Proximity Enable $en"
+    export function proximityEnable(en: boolean = true): void {
+        let t = readReg(R_ENABLE)
+        t = en ? (t | B_PEN) : (t & ~B_PEN)
+        writeReg(R_ENABLE, t)
+    }
+
+    //% block="Gesture Enable $en"
+    export function gestureEnable(en: boolean = true): void {
+        let t = readReg(R_ENABLE)
+        t = en ? (t | B_GEN) : (t & ~B_GEN)
+        writeReg(R_ENABLE, t)
+    }
+
+    // --- Gain settings ---
+    //% block="set ALS GAIN %gain"
+    export function setALSGain(gain: APDS9960_AGAIN): void {
+        let t = readReg(R_CONTROL)
+        t &= ~M_AGAIN
+        t |= (gain & M_AGAIN)
+        writeReg(R_CONTROL, t)
+        _again = gain
+    }
+
+    //% block="set Proximity GAIN %gain"
+    export function setProximityGain(gain: APDS9960_PGAIN): void {
+        let t = readReg(R_CONTROL)
+        t &= ~M_PGAIN
+        t |= ((gain << 2) & M_PGAIN)
+        writeReg(R_CONTROL, t)
+        _pgain = gain
+    }
+
+    // --- RGBC / ALS reads ---
+    //% block="get Clear (Ambient)"
+    export function getClear(): number {
+        return read16(R_CDATAL)
+    }
+
+    //% block="get Red"
+    export function getRed(): number {
+        return read16(R_RDATAL)
+    }
+
+    //% block="get Green"
+    export function getGreen(): number {
+        return read16(R_GDATAL)
+    }
+
+    //% block="get Blue"
+    export function getBlue(): number {
+        return read16(R_BDATAL)
+    }
+
+    // --- Proximity ---
+    //% block="get Proximity"
+    export function getProximity(): number {
+        // 8-bit proximity; optional Skalierung über _pgain je nach Anwendung
+        pins.i2cWriteNumber(APDS9960_I2C_ADDR, R_PDATA, NumberFormat.UInt8BE)
+        return pins.i2cReadNumber(APDS9960_I2C_ADDR, NumberFormat.UInt8BE)
+    }
+
+    // --- Gesture (vereinfachte Auswertung) ---
+    //% block="is Gesture Available?"
+    export function isGestureAvailable(): boolean {
+        let st = readReg(R_GSTATUS)
+        return (st & 0x01) != 0 // GVALID
+    }
+
+    //% block="read Gesture"
+    export function readGesture(): APDS9960_Gesture {
+        // Einfacher Decoder: mittelt erste/letzte Messungen in GFIFO und vergleicht Richtungsdeltas
+        if (!isGestureAvailable()) return APDS9960_Gesture.None
+        let level = readReg(R_GFLVL) & 0x3F // max. 32 Datensätze
+        if (level < 4) return APDS9960_Gesture.None
+
+        // Je Kanal U/D/L/R die ersten und letzten 4 Samples mitteln
+        let u = readBlock(R_GFIFO_U, level)
+        let d = readBlock(R_GFIFO_D, level)
+        let l = readBlock(R_GFIFO_L, level)
+        let r = readBlock(R_GFIFO_R, level)
+
+        let sumFirstU = 0, sumFirstD = 0, sumFirstL = 0, sumFirstR = 0
+        let sumLastU = 0, sumLastD = 0, sumLastL = 0, sumLastR = 0
+        let n = Math.min(4, level)
+        for (let i = 0; i < n; i++) {
+            sumFirstU += u.getUint8(i)
+            sumFirstD += d.getUint8(i)
+            sumFirstL += l.getUint8(i)
+            sumFirstR += r.getUint8(i)
+            sumLastU += u.getUint8(level - 1 - i)
+            sumLastD += d.getUint8(level - 1 - i)
+            sumLastL += l.getUint8(level - 1 - i)
+            sumLastR += r.getUint8(level - 1 - i)
         }
+        let dU = sumLastU - sumFirstU
+        let dD = sumLastD - sumFirstD
+        let dL = sumLastL - sumFirstL
+        let dR = sumLastR - sumFirstR
 
-        function readReg(reg: number): number {
-            pins.i2cWriteNumber(APDS9960_I2C_ADDR, reg, NumberFormat.UInt8BE)
-            return pins.i2cReadNumber(APDS9960_I2C_ADDR, NumberFormat.UInt8BE)
+        // Schwellen (empirisch): > 15 deutet Richtung an
+        let thr = 15
+        if (Math.abs(dL - dR) > Math.abs(dU - dD)) {
+            if (dR - dL > thr) return APDS9960_Gesture.Right
+            if (dL - dR > thr) return APDS9960_Gesture.Left
+        } else {
+            if (dU - dD > thr) return APDS9960_Gesture.Up
+            if (dD - dU > thr) return APDS9960_Gesture.Down
         }
+        // Near/Far grob (hohe absol. Werte in allen Richtungen)
+        let totFirst = sumFirstU + sumFirstD + sumFirstL + sumFirstR
+        let totLast = sumLastU + sumLastD + sumLastL + sumLastR
+        if (totLast - totFirst > 4 * thr) return APDS9960_Gesture.Near
+        if (totFirst - totLast > 4 * thr) return APDS9960_Gesture.Far
 
-        function read16(regL: number): number {
-            // liest LSB, dann MSB → UInt16LE
-            pins.i2cWriteNumber(APDS9960_I2C_ADDR, regL, NumberFormat.UInt8BE)
-            return pins.i2cReadNumber(APDS9960_I2C_ADDR, NumberFormat.UInt16LE)
-        }
+        return APDS9960_Gesture.None
+    }
 
-        function readBlock(reg: number, len: number): Buffer {
-            pins.i2cWriteNumber(APDS9960_I2C_ADDR, reg, NumberFormat.UInt8BE)
-            return pins.i2cReadBuffer(APDS9960_I2C_ADDR, len)
-        }
+    // --- Initialisierung: sinnvolle Defaults für alle Engines ---
+    //% block="APDS9960 Initialize"
+    export function init(): void {
+        // Disable everything, dann Defaults setzen
+        writeReg(R_ENABLE, 0x00)
 
-        // --- Power & Mode ---
-        //% block="APDS9960 Power On"
-        export function powerOn(): void {
-            let t = readReg(R_ENABLE)
-            t |= B_PON
-            writeReg(R_ENABLE, t)
-            basic.pause(3)
-        }
+        // ALS/Wait Integrationszeiten (SparkFun-Defaults)
+        writeReg(R_ATIME, 219)  // ~103ms
+        writeReg(R_WTIME, 246)  // ~27ms
+        writeReg(R_PERS, 0x11)  // 2 aufeinanderfolgende Events für Interrupt
 
-        //% block="APDS9960 Power Off"
-        export function powerOff(): void {
-            let t = readReg(R_ENABLE)
-            t &= ~B_PON
-            writeReg(R_ENABLE, t)
-        }
+        writeReg(R_CONFIG1, 0x60) // kein 12x Wait-Faktor
+        writeReg(R_PPULSE, 0x87)  // Prox: 16us, 8 Puls
+        writeReg(R_CONTROL, (APDS9960_AGAIN.AGAIN_4X & M_AGAIN) | ((APDS9960_PGAIN.PGAIN_4X << 2) & M_PGAIN))
+        _again = APDS9960_AGAIN.AGAIN_4X
+        _pgain = APDS9960_PGAIN.PGAIN_4X
 
-        //% block="ALS Enable $en"
-        export function alsEnable(en: boolean = true): void {
-            let t = readReg(R_ENABLE)
-            t = en ? (t | B_AEN) : (t & ~B_AEN)
-            writeReg(R_ENABLE, t)
-        }
+        writeReg(R_CONFIG2, 0x01) // LED Boost off, keine Sättigungs-Ints
+        writeReg(R_POFFSET_UR, 0x00)
+        writeReg(R_POFFSET_DL, 0x00)
+        writeReg(R_CONFIG3, 0x00) // alle Photodioden aktiv
 
-        //% block="Proximity Enable $en"
-        export function proximityEnable(en: boolean = true): void {
-            let t = readReg(R_ENABLE)
-            t = en ? (t | B_PEN) : (t & ~B_PEN)
-            writeReg(R_ENABLE, t)
-        }
+        // Gesture Engine Defaults (SparkFun nahegelegt)
+        writeReg(R_GPENTH, 40)
+        writeReg(R_GEXTH, 30)
+        writeReg(R_GCONF1, 0x40) // 4 Gesten für Interrupt, 1 für Exit
+        writeReg(R_GCONF2, 0x41) // GGAIN=4x (bits 5..6 = 2), GWTIME=2.8ms (bits 0..2 = 1)
+        writeReg(R_GPULSE, 0xC9) // 32us, 10 Puls
+        writeReg(R_GOFFSET_U, 0x00)
+        writeReg(R_GOFFSET_D, 0x00)
+        writeReg(R_GOFFSET_L, 0x00)
+        writeReg(R_GOFFSET_R, 0x00)
+        writeReg(R_GCONF3, 0x00)
+        writeReg(R_GCONF4, 0x00) // Gesture Interrupt disable zunächst
 
-        //% block="Gesture Enable $en"
-        export function gestureEnable(en: boolean = true): void {
-            let t = readReg(R_ENABLE)
-            t = en ? (t | B_GEN) : (t & ~B_GEN)
-            writeReg(R_ENABLE, t)
-        }
+        // ALS + Proximity aktivieren und Power On
+        alsEnable(true)
+        proximityEnable(true)
+        powerOn()
 
-        // --- Gain settings ---
-        //% block="set ALS GAIN %gain"
-        export function setALSGain(gain: APDS9960_AGAIN): void {
-            let t = readReg(R_CONTROL)
-            t &= ~M_AGAIN
-            t |= (gain & M_AGAIN)
-            writeReg(R_CONTROL, t)
-            _again = gain
-        }
-
-        //% block="set Proximity GAIN %gain"
-        export function setProximityGain(gain: APDS9960_PGAIN): void {
-            let t = readReg(R_CONTROL)
-            t &= ~M_PGAIN
-            t |= ((gain << 2) & M_PGAIN)
-            writeReg(R_CONTROL, t)
-            _pgain = gain
-        }
-
-        // --- RGBC / ALS reads ---
-        //% block="get Clear (Ambient)"
-        export function getClear(): number {
-            return read16(R_CDATAL)
-        }
-
-        //% block="get Red"
-        export function getRed(): number {
-            return read16(R_RDATAL)
-        }
-
-        //% block="get Green"
-        export function getGreen(): number {
-            return read16(R_GDATAL)
-        }
-
-        //% block="get Blue"
-        export function getBlue(): number {
-            return read16(R_BDATAL)
-        }
-
-        // --- Proximity ---
-        //% block="get Proximity"
-        export function getProximity(): number {
-            // 8-bit proximity; optional Skalierung über _pgain je nach Anwendung
-            pins.i2cWriteNumber(APDS9960_I2C_ADDR, R_PDATA, NumberFormat.UInt8BE)
-            return pins.i2cReadNumber(APDS9960_I2C_ADDR, NumberFormat.UInt8BE)
-        }
-
-        // --- Gesture (vereinfachte Auswertung) ---
-        //% block="is Gesture Available?"
-        export function isGestureAvailable(): boolean {
-            let st = readReg(R_GSTATUS)
-            return (st & 0x01) != 0 // GVALID
-        }
-
-        //% block="read Gesture"
-        export function readGesture(): APDS9960_Gesture {
-            // Einfacher Decoder: mittelt erste/letzte Messungen in GFIFO und vergleicht Richtungsdeltas
-            if (!isGestureAvailable()) return APDS9960_Gesture.None
-            let level = readReg(R_GFLVL) & 0x3F // max. 32 Datensätze
-            if (level < 4) return APDS9960_Gesture.None
-
-            // Je Kanal U/D/L/R die ersten und letzten 4 Samples mitteln
-            let u = readBlock(R_GFIFO_U, level)
-            let d = readBlock(R_GFIFO_D, level)
-            let l = readBlock(R_GFIFO_L, level)
-            let r = readBlock(R_GFIFO_R, level)
-
-            let sumFirstU = 0, sumFirstD = 0, sumFirstL = 0, sumFirstR = 0
-            let sumLastU = 0, sumLastD = 0, sumLastL = 0, sumLastR = 0
-            let n = Math.min(4, level)
-            for (let i = 0; i < n; i++) {
-                sumFirstU += u.getUint8(i)
-                sumFirstD += d.getUint8(i)
-                sumFirstL += l.getUint8(i)
-                sumFirstR += r.getUint8(i)
-                sumLastU += u.getUint8(level - 1 - i)
-                sumLastD += d.getUint8(level - 1 - i)
-                sumLastL += l.getUint8(level - 1 - i)
-                sumLastR += r.getUint8(level - 1 - i)
-            }
-            let dU = sumLastU - sumFirstU
-            let dD = sumLastD - sumFirstD
-            let dL = sumLastL - sumFirstL
-            let dR = sumLastR - sumFirstR
-
-            // Schwellen (empirisch): > 15 deutet Richtung an
-            let thr = 15
-            if (Math.abs(dL - dR) > Math.abs(dU - dD)) {
-                if (dR - dL > thr) return APDS9960_Gesture.Right
-                if (dL - dR > thr) return APDS9960_Gesture.Left
-            } else {
-                if (dU - dD > thr) return APDS9960_Gesture.Up
-                if (dD - dU > thr) return APDS9960_Gesture.Down
-            }
-            // Near/Far grob (hohe absol. Werte in allen Richtungen)
-            let totFirst = sumFirstU + sumFirstD + sumFirstL + sumFirstR
-            let totLast = sumLastU + sumLastD + sumLastL + sumLastR
-            if (totLast - totFirst > 4 * thr) return APDS9960_Gesture.Near
-            if (totFirst - totLast > 4 * thr) return APDS9960_Gesture.Far
-
-            return APDS9960_Gesture.None
-        }
-
-        // --- Initialisierung: sinnvolle Defaults für alle Engines ---
-        //% block="APDS9960 Initialize"
-        export function init(): void {
-            // Disable everything, dann Defaults setzen
-            writeReg(R_ENABLE, 0x00)
-
-            // ALS/Wait Integrationszeiten (SparkFun-Defaults)
-            writeReg(R_ATIME, 219)  // ~103ms
-            writeReg(R_WTIME, 246)  // ~27ms
-            writeReg(R_PERS, 0x11)  // 2 aufeinanderfolgende Events für Interrupt
-
-            writeReg(R_CONFIG1, 0x60) // kein 12x Wait-Faktor
-            writeReg(R_PPULSE, 0x87)  // Prox: 16us, 8 Puls
-            writeReg(R_CONTROL, (APDS9960_AGAIN.AGAIN_4X & M_AGAIN) | ((APDS9960_PGAIN.PGAIN_4X << 2) & M_PGAIN))
-            _again = APDS9960_AGAIN.AGAIN_4X
-            _pgain = APDS9960_PGAIN.PGAIN_4X
-
-            writeReg(R_CONFIG2, 0x01) // LED Boost off, keine Sättigungs-Ints
-            writeReg(R_POFFSET_UR, 0x00)
-            writeReg(R_POFFSET_DL, 0x00)
-            writeReg(R_CONFIG3, 0x00) // alle Photodioden aktiv
-
-            // Gesture Engine Defaults (SparkFun nahegelegt)
-            writeReg(R_GPENTH, 40)
-            writeReg(R_GEXTH, 30)
-            writeReg(R_GCONF1, 0x40) // 4 Gesten für Interrupt, 1 für Exit
-            writeReg(R_GCONF2, 0x41) // GGAIN=4x (bits 5..6 = 2), GWTIME=2.8ms (bits 0..2 = 1)
-            writeReg(R_GPULSE, 0xC9) // 32us, 10 Puls
-            writeReg(R_GOFFSET_U, 0x00)
-            writeReg(R_GOFFSET_D, 0x00)
-            writeReg(R_GOFFSET_L, 0x00)
-            writeReg(R_GOFFSET_R, 0x00)
-            writeReg(R_GCONF3, 0x00)
-            writeReg(R_GCONF4, 0x00) // Gesture Interrupt disable zunächst
-
-            // ALS + Proximity aktivieren und Power On
-            alsEnable(true)
-            proximityEnable(true)
-            powerOn()
-
-            // optional: Gesture aktivieren
-            gestureEnable(true)
-        }
+        // optional: Gesture aktivieren
+        gestureEnable(true)
     }
     //Farbsensor
 

@@ -515,38 +515,50 @@ namespace HKEMT6PrMi {
 
 
 
-// APDS9960 MakeCode Extension (micro:bit)
-// Aktiviert/Deaktiviert ALS, Proximity & Gesture und stellt Lese-Blöcke bereit.
-// I2C-Adresse fix 0x39; Register laut Datenblatt (ENABLE 0x80, GCONF4 0xAB, usw.)
+// APDS9960 MakeCode Extension (micro:bit) – robuste Defaults für Gesture & ALS
+// I2C-Adresse fix 0x39; wichtige Register & Bits laut Datenblatt:
+// ENABLE(0x80): PON/AEN/PEN/GEN; GCONF1..4(0xA2..0xAB); GPULSE(0xA6); CONFIG2(0x90)
+// STATUS(0x93) AVALID; PDATA(0x9C); R/G/B/CLR(0x96..0x9B / 0x94..0x95)
 
 namespace apds9960 {
-    // ---- Konstanten (Register) ----
+    // ---- Register-Adressen ----
     const I2C_ADDR = 0x39
     const REG_ENABLE = 0x80
     const REG_ATIME = 0x81
     const REG_ID = 0x92
     const REG_STATUS = 0x93
 
-    const REG_CDATA_L = 0x94 // Clear (low/high)
-    const REG_RDATA_L = 0x96 // Rot
-    const REG_GDATA_L = 0x98 // Grün
-    const REG_BDATA_L = 0x9A // Blau
+    const REG_CDATA_L = 0x94
+    const REG_RDATA_L = 0x96
+    const REG_GDATA_L = 0x98
+    const REG_BDATA_L = 0x9A
+    const REG_PDATA = 0x9C
 
-    const REG_PDATA = 0x9C // Proximity (8-bit)
-    const REG_GCONF4 = 0xAB // Gesture: [2]=GFIFO_CLR, [1]=GIEN, [0]=GMODE
-    const REG_GFLVL = 0xAE // Gesture FIFO Level
-    const REG_GSTATUS = 0xAF // [0]=GVALID
+    const REG_CONFIG2 = 0x90 // LEDBOOST (Bits 5:4)
 
+    const REG_GCONF1 = 0xA2 // GFIFOTH(7:6), GEXMSK(5:2), GEXPERS(1:0)
+    const REG_GCONF2 = 0xA3 // GGAIN(6:5), GLDRIVE(4:3), GWTIME(2:0)
+    const REG_GO_U = 0xA4 // GOFFSET_U
+    const REG_GO_D = 0xA5 // GOFFSET_D
+    const REG_GPULSE = 0xA6 // GPLEN(7:6), GPULSE(5:0)
+    const REG_GO_L = 0xA7 // GOFFSET_L
+    const REG_GCONF3 = 0xAA // GDIMS(1:0)
+    const REG_GCONF4 = 0xAB // GFIFO_CLR(2), GIEN(1), GMODE(0)
+    const REG_GPENTH = 0xA0 // Gesture Proximity Entry Threshold
+    const REG_GEXTH = 0xA1 // Gesture Exit Threshold
+
+    const REG_GFLVL = 0xAE
+    const REG_GSTATUS = 0xAF
     const REG_GFIFO_U = 0xFC
     const REG_GFIFO_D = 0xFD
     const REG_GFIFO_L = 0xFE
     const REG_GFIFO_R = 0xFF
 
-    // ENABLE-Bits (0x80)
-    const PON = 0x01   // Power ON
-    const AEN = 0x02   // ALS enable
-    const PEN = 0x04   // Proximity enable
-    const GEN = 0x40   // Gesture enable
+    // ENABLE-Bits
+    const PON = 0x01
+    const AEN = 0x02
+    const PEN = 0x04
+    const GEN = 0x40
 
     // ---- I2C-Helfer ----
     function write8(reg: number, value: number) {
@@ -565,49 +577,90 @@ namespace apds9960 {
         return (hi << 8) | lo
     }
 
-    // ---- interne Minimal-Init ----
+    // ---- Defaults / Initialisierung ----
     function minimalInit() {
-        const id = read8(REG_ID) // 0xAB oder 0xA8 sind üblich
-        // ALS-Integrationszeit: 219 (~103 ms) als brauchbarer Default
+        const id = read8(REG_ID) // 0xAB oder 0xA8 üblich
+        // ALS-Integrationszeit: 219 (~103 ms) – guter Startwert
         write8(REG_ATIME, 219)
-        // (weitere Defaults – Gain/LED-Drive – können bei Bedarf ergänzt werden)
+
+        // LEDBOOST (CONFIG2 Bits 5:4): 0b01 => leichter Boost
+        // Werte: 0b00=1x, 0b01=2x, 0b10=3x, 0b11=4x
+        let c2 = read8(REG_CONFIG2)
+        c2 = (c2 & 0xCF) | (0x10) // setze LEDBOOST=2x
+        write8(REG_CONFIG2, c2)
+
+        // Gesture Parameter (Bewährte Defaults):
+        // GCONF1: GFIFOTH=01 (= 8-Datasets), Rest Default
+        write8(REG_GCONF1, 0b01000000) // 0x40
+
+        // GCONF2: GGAIN=01 (2x), GLDRIVE=01 (50mA), GWTIME=001 (2.8ms)
+        // (Anpassen je nach Bedarf/Entfernung)
+        write8(REG_GCONF2, 0b01011001) // 0x59
+
+        // GPULSE: GPLEN=01 (16us), GPULSE=10 (16 Pulse) – robust für erkennbare Gesten
+        write8(REG_GPULSE, (0b01 << 6) | 16) // 0x40 + 16 = 0x50
+
+        // GOFFSETs: typ. 0
+        write8(REG_GO_U, 0x00)
+        write8(REG_GO_D, 0x00)
+        write8(REG_GO_L, 0x00)
+
+        // GCONF3: GDIMS = 0b00 (alle Dimensionen)
+        write8(REG_GCONF3, 0x00)
+
+        // Entry/Exit Thresholds: Einstieg über Nähe
+        write8(REG_GPENTH, 0x20) // Entry: Proximity >=32
+        write8(REG_GEXTH, 0x10)  // Exit: Proximity <=16
     }
 
-    // ---- Gesture-Mode setzen/clearen ----
     function setGestureMode(on: boolean) {
         let v = read8(REG_GCONF4)
+        // GIEN aktivieren, damit Gesture-Valid sauber getriggert wird
+        v = on ? (v | 0x02) : (v & ~0x02) // GIEN Bit1
         v = on ? (v | 0x01) : (v & ~0x01) // GMODE Bit0
         write8(REG_GCONF4, v)
     }
     function clearGestureFIFO() {
         let v = read8(REG_GCONF4)
-        v = v | 0x04 // GFIFO_CLR Bit2
+        v = v | 0x04 // GFIFO_CLR
         write8(REG_GCONF4, v)
         v = v & ~0x04
         write8(REG_GCONF4, v)
     }
 
+    // ---- ALS-Wartefunktion: erst lesen wenn AVALID ----
+    function waitALSValid(timeoutMs = 50): boolean {
+        const start = control.millis()
+        while (control.millis() - start < timeoutMs) {
+            const st = read8(REG_STATUS)
+            const avalid = (st & 0x01) != 0 // STATUS<AVALID> Bit0
+            if (avalid) return true
+            basic.pause(2)
+        }
+        return false
+    }
+
     /**
      * Sensor anschalten:
-     * Power ON, minimal init, ALS+Proximity+Gesture aktivieren
-     * und Gesture-Mode direkt starten.
+     * Power ON, Init, ALS+Proximity+Gesture aktivieren, GMODE starten.
      */
     //% block="Sensor anschalten"
     //% weight=90 color=#5C9DFF icon="\uf2db"
     export function powerOnSensor(): void {
         minimalInit()
         write8(REG_ENABLE, PON | AEN | PEN | GEN)
-        setGestureMode(true) // GMODE=1
+        setGestureMode(true)
+        clearGestureFIFO()
     }
 
     /**
      * Sensor ausschalten:
-     * Alle Engines deaktivieren und GMODE beenden.
+     * Alle Engines aus, GMODE aus, FIFO leeren.
      */
     //% block="Sensor ausschalten"
     //% weight=89 color=#5C9DFF icon="\uf011"
     export function powerOffSensor(): void {
-        write8(REG_ENABLE, 0x00) // Engines aus
+        write8(REG_ENABLE, 0x00)
         setGestureMode(false)
         clearGestureFIFO()
     }
@@ -618,10 +671,10 @@ namespace apds9960 {
     //% block="Proximity lesen"
     //% weight=80 color=#5C9DFF
     export function readProximity(): number {
-        return read8(REG_PDATA) // 0..255
+        return read8(REG_PDATA)
     }
 
-    // Richtungen für Gesten
+    // ---- Gesten-Enum ----
     export enum GestureDirection {
         //% block="keine"
         None = 0,
@@ -635,13 +688,14 @@ namespace apds9960 {
         Right = 4,
     }
 
-    // interne Gesten-Detektion (FIFO auslesen, Differenzen bilden)
+    // ---- Gesten-Detektion (robustere Heuristik) ----
     function readGestureInternal(): GestureDirection {
+        // Prüfe GSTATUS GVALID
         const gstat = read8(REG_GSTATUS)
         const gvalid = (gstat & 0x01) != 0
         if (!gvalid) return GestureDirection.None
 
-        const level = read8(REG_GFLVL) // Anzahl Datensätze im FIFO
+        const level = read8(REG_GFLVL)
         if (level <= 0) return GestureDirection.None
 
         let sumU = 0, sumD = 0, sumL = 0, sumR = 0
@@ -655,7 +709,7 @@ namespace apds9960 {
 
         const diffUD = sumU - sumD
         const diffLR = sumL - sumR
-        const TH = 30 // Schwelle – ggf. projektabhängig anpassbar
+        const TH = 20 // etwas niedrigere Schwelle
 
         if (Math.abs(diffUD) > Math.abs(diffLR)) {
             if (diffUD > TH) return GestureDirection.Up
@@ -669,7 +723,6 @@ namespace apds9960 {
 
     /**
      * Block: Geste
-     * Gibt die erkannte Richtung als Enum zurück (hoch/runter/links/rechts/keine).
      */
     //% block="Geste"
     //% weight=85 color=#5C9DFF
@@ -678,7 +731,7 @@ namespace apds9960 {
     }
 
     /**
-     * Optional: Gesten-Text ("UP/DOWN/LEFT/RIGHT" oder "keine")
+     * Optional: Gesten-Text
      */
     //% block="Gesten-Text"
     //% weight=79 color=#5C9DFF
@@ -694,29 +747,33 @@ namespace apds9960 {
     }
 
     /**
-     * Clear/Rot/Grün/Blau lesen (16-bit Werte 0..65535).
+     * CLR lesen (wartet auf AVALID, um konstante Werte zu vermeiden)
      */
     //% block="CLR lesen"
     //% weight=78 color=#5C9DFF
     export function readClear(): number {
+        waitALSValid(60)
         return read16LE(REG_CDATA_L)
     }
 
     //% block="Rot lesen"
     //% weight=77 color=#E74C3C
     export function readRed(): number {
+        waitALSValid(60)
         return read16LE(REG_RDATA_L)
     }
 
     //% block="Grün lesen"
     //% weight=76 color=#27AE60
     export function readGreen(): number {
+        waitALSValid(60)
         return read16LE(REG_GDATA_L)
     }
 
     //% block="Blau lesen"
     //% weight=75 color=#2980B9
     export function readBlue(): number {
+        waitALSValid(60)
         return read16LE(REG_BDATA_L)
     }
 }

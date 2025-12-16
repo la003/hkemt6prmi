@@ -483,13 +483,18 @@ namespace HKEMT6PrMi {
 
 
 //neue Kategorie
-// APDS9960 MakeCode Extension (micro:bit) – robuste Defaults für Gesture & ALS
-// I2C-Adresse fix 0x39; wichtige Register & Bits laut Datenblatt:
-// ENABLE(0x80): PON/AEN/PEN/GEN; GCONF1..4(0xA2..0xAB); GPULSE(0xA6); CONFIG2(0x90)
-// STATUS(0x93) AVALID; PDATA(0x9C); R/G/B/CLR(0x96..0x9B / 0x94..0x95)
 
+// APDS9960 MakeCode Extension (micro:bit) — stabile Defaults + optionales Gestenprofil
+// I2C-Adresse fix 0x39; zentrale Register:
+// ENABLE(0x80): PON/AEN/PEN/GEN; CONFIG2(0x90): LEDBOOST
+// GCONF1..4(0xA2..0xAB): Gesture-Konfiguration; GPULSE(0xA6)
+// STATUS(0x93): AVALID; PDATA(0x9C); R/G/B/CLR(0x96..0x9B / 0x94..0x95)
+// GSTATUS(0xAF): GVALID; GFLVL(0xAE); GFIFO U/D/L/R(0xFC..0xFF)
+
+// Gruppensortierung für die Palette
+//% groups='["Power", "Konfiguration", "Lesen"]'
 namespace apds9960 {
-    // ---- Register-Adressen ----
+    // ---- Konstanten (Register-Adressen) ----
     const I2C_ADDR = 0x39
     const REG_ENABLE = 0x80
     const REG_ATIME = 0x81
@@ -512,8 +517,8 @@ namespace apds9960 {
     const REG_GO_L = 0xA7 // GOFFSET_L
     const REG_GCONF3 = 0xAA // GDIMS(1:0)
     const REG_GCONF4 = 0xAB // GFIFO_CLR(2), GIEN(1), GMODE(0)
-    const REG_GPENTH = 0xA0 // Gesture Proximity Entry Threshold
-    const REG_GEXTH = 0xA1 // Gesture Exit Threshold
+    const REG_GPENTH = 0xA0 // Entry Threshold
+    const REG_GEXTH = 0xA1 // Exit Threshold
 
     const REG_GFLVL = 0xAE
     const REG_GSTATUS = 0xAF
@@ -527,6 +532,20 @@ namespace apds9960 {
     const AEN = 0x02
     const PEN = 0x04
     const GEN = 0x40
+
+    // Richtungen für Gesten
+    export enum GestureDirection {
+        //% block="keine"
+        None = 0,
+        //% block="hoch"
+        Up = 1,
+        //% block="runter"
+        Down = 2,
+        //% block="links"
+        Left = 3,
+        //% block="rechts"
+        Right = 4,
+    }
 
     // ---- I2C-Helfer ----
     function write8(reg: number, value: number) {
@@ -545,127 +564,169 @@ namespace apds9960 {
         return (hi << 8) | lo
     }
 
-    // ---- Defaults / Initialisierung ----
-    function minimalInit() {
-        const id = read8(REG_ID) // 0xAB oder 0xA8 üblich
-        // ALS-Integrationszeit: 219 (~103 ms) – guter Startwert
+    // ---- interner Zustand für Entprellung ----
+    let _lastGesture: GestureDirection = GestureDirection.None
+    let _cooldownUntil = 0
+    let _lockAxis: number = 0 // 0=none, 1=vert, 2=horiz
+
+    // Tuning-Konstanten (kannst du bei Bedarf anpassen)
+    const _PROX_GATE = 16      // Mindestnähe der Hand (Proximity-Gate)
+    const _COOLDOWN_MS = 320   // Sperrzeit nach erkannter Geste
+    const _ENERGY_MIN = 60     // Mindest-"Energie" in FIFO (Summe U+D+L+R)
+    const _TH = 25             // Deadband-Schwelle für DiffUD/DiffLR
+
+    // ---- Initialisierung mit stabilen Defaults ----
+    function initStable() {
+        // ALS-Integrationszeit ~103 ms
         write8(REG_ATIME, 219)
 
-        // LEDBOOST (CONFIG2 Bits 5:4): 0b01 => leichter Boost
-        // Werte: 0b00=1x, 0b01=2x, 0b10=3x, 0b11=4x
+        // LEDBOOST moderat: 2x
         let c2 = read8(REG_CONFIG2)
-        c2 = (c2 & 0xCF) | (0x10) // setze LEDBOOST=2x
+        c2 = (c2 & 0xCF) | 0x10
         write8(REG_CONFIG2, c2)
 
-        // Gesture Parameter (Bewährte Defaults):
-        // GCONF1: GFIFOTH=01 (= 8-Datasets), Rest Default
-        write8(REG_GCONF1, 0b01000000) // 0x40
-
-        // GCONF2: GGAIN=01 (2x), GLDRIVE=01 (50mA), GWTIME=001 (2.8ms)
-        // (Anpassen je nach Bedarf/Entfernung)
-        write8(REG_GCONF2, 0b01011001) // 0x59
-
-        // GPULSE: GPLEN=01 (16us), GPULSE=10 (16 Pulse) – robust für erkennbare Gesten
-        write8(REG_GPULSE, (0b01 << 6) | 16) // 0x40 + 16 = 0x50
-
-        // GOFFSETs: typ. 0
-        write8(REG_GO_U, 0x00)
-        write8(REG_GO_D, 0x00)
-        write8(REG_GO_L, 0x00)
-
-        // GCONF3: GDIMS = 0b00 (alle Dimensionen)
-        write8(REG_GCONF3, 0x00)
-
-        // Entry/Exit Thresholds: Einstieg über Nähe
-        write8(REG_GPENTH, 0x20) // Entry: Proximity >=32
-        write8(REG_GEXTH, 0x10)  // Exit: Proximity <=16
+        // Gesture: ausgewogene Startwerte
+        write8(REG_GCONF1, 0b01000000)                    // GFIFOTH=01 (8 Datensätze)
+        write8(REG_GCONF2, (0b10 << 5) | (0b01 << 3) | 0b010) // GGAIN=4x, GLDRIVE=50mA, GWTIME=5.6ms
+        write8(REG_GPULSE, (0b01 << 6) | 16)              // GPLEN=16µs, GPULSE=16
+        write8(REG_GO_U, 0x00); write8(REG_GO_D, 0x00); write8(REG_GO_L, 0x00) // Offsets 0
+        write8(REG_GCONF3, 0x00)                          // alle Dimensionen
+        write8(REG_GPENTH, 0x18)                          // Entry ~24
+        write8(REG_GEXTH, 0x0C)                           // Exit  ~12
     }
 
     function setGestureMode(on: boolean) {
         let v = read8(REG_GCONF4)
-        // GIEN aktivieren, damit Gesture-Valid sauber getriggert wird
-        v = on ? (v | 0x02) : (v & ~0x02) // GIEN Bit1
-        v = on ? (v | 0x01) : (v & ~0x01) // GMODE Bit0
+        v = on ? (v | 0x02) : (v & ~0x02) // GIEN
+        v = on ? (v | 0x01) : (v & ~0x01) // GMODE
         write8(REG_GCONF4, v)
     }
     function clearGestureFIFO() {
         let v = read8(REG_GCONF4)
-        v = v | 0x04 // GFIFO_CLR
-        write8(REG_GCONF4, v)
-        v = v & ~0x04
-        write8(REG_GCONF4, v)
+        write8(REG_GCONF4, v | 0x04)   // GFIFO_CLR
+        write8(REG_GCONF4, v & ~0x04)
     }
 
-    // ---- ALS-Wartefunktion: erst lesen wenn AVALID ----
-    function waitALSValid(timeoutMs = 50): boolean {
+    function waitALSValid(timeoutMs = 60): boolean {
         const start = control.millis()
         while (control.millis() - start < timeoutMs) {
             const st = read8(REG_STATUS)
-            const avalid = (st & 0x01) != 0 // STATUS<AVALID> Bit0
+            const avalid = (st & 0x01) != 0 // AVALID Bit0
             if (avalid) return true
             basic.pause(2)
         }
         return false
     }
 
+    // ===== POWER =====
+
     /**
-     * Sensor anschalten:
-     * Power ON, Init, ALS+Proximity+Gesture aktivieren, GMODE starten.
+     * Sensor anschalten (stabile Defaults, PON/AEN/PEN/GEN, GMODE/GIEN, FIFO clear)
      */
-    //% block="Sensor anschalten"
-    //% weight=90 color=#5C9DFF icon="\uf2db"
+    //% block="Sensor anschalten" group="Power" weight=100 color=#5C9DFF icon="\uf2db"
     export function powerOnSensor(): void {
-        minimalInit()
+        initStable()
         write8(REG_ENABLE, PON | AEN | PEN | GEN)
         setGestureMode(true)
         clearGestureFIFO()
+        // Entprellungszustand zurücksetzen
+        _lastGesture = GestureDirection.None
+        _cooldownUntil = 0
+        _lockAxis = 0
     }
 
     /**
-     * Sensor ausschalten:
-     * Alle Engines aus, GMODE aus, FIFO leeren.
+     * Sensor ausschalten
      */
-    //% block="Sensor ausschalten"
-    //% weight=89 color=#5C9DFF icon="\uf011"
+    //% block="Sensor ausschalten" group="Power" weight=99 color=#5C9DFF icon="\uf011"
     export function powerOffSensor(): void {
         write8(REG_ENABLE, 0x00)
         setGestureMode(false)
         clearGestureFIFO()
+        _lastGesture = GestureDirection.None
+        _cooldownUntil = 0
+        _lockAxis = 0
+    }
+
+    // ===== KONFIGURATION =====
+
+    export enum GestureProfile {
+        //% block="ausgewogen"
+        Balanced = 0,
+        //% block="verstärkt"
+        Boost = 1,
+        //% block="rauscharm"
+        LowNoise = 2
     }
 
     /**
-     * Proximity lesen (0..255).
+     * Gestenprofil wählen (Balanced/Boost/LowNoise)
+     * Achtung: Boost kann bei manchen Aufbauten zu Rauschen führen.
      */
-    //% block="Proximity lesen"
-    //% weight=80 color=#5C9DFF
+    //% block="Gestenprofil %mode" group="Konfiguration" weight=70 color=#5C9DFF
+    export function setGestureProfile(mode: GestureProfile): void {
+        // Gemeinsame Basis
+        write8(REG_GCONF1, 0b01000000) // GFIFOTH=01
+        write8(REG_GCONF3, 0x00)       // alle Dimensionen
+        write8(REG_GO_U, 0x00); write8(REG_GO_D, 0x00); write8(REG_GO_L, 0x00)
+
+        if (mode == GestureProfile.Balanced) {
+            // LEDBOOST 2x, Drive 50mA, Gain 4x, Wait 5.6ms, 16 Pulse, moderate Schwellen
+            let c2 = read8(REG_CONFIG2); c2 = (c2 & 0xCF) | 0x10; write8(REG_CONFIG2, c2)
+            write8(REG_GCONF2, (0b10 << 5) | (0b01 << 3) | 0b010)
+            write8(REG_GPULSE, (0b01 << 6) | 16)
+            write8(REG_GPENTH, 0x18); write8(REG_GEXTH, 0x0C)
+        } else if (mode == GestureProfile.Boost) {
+            // Vorsichtiger Boost: LEDBOOST 3x, Drive 100mA, Gain 8x, Wait 8.4ms, 24 Pulse
+            let c2 = read8(REG_CONFIG2); c2 = (c2 & 0xCF) | 0x20; write8(REG_CONFIG2, c2)
+            write8(REG_GCONF2, (0b11 << 5) | (0b10 << 3) | 0b011)
+            write8(REG_GPULSE, (0b01 << 6) | 24)
+            write8(REG_GPENTH, 0x10); write8(REG_GEXTH, 0x08)
+        } else {
+            // LowNoise: LEDBOOST 1x, Drive 25mA, Gain 2x, Wait 5.6ms, 12 Pulse, strengere Schwellen
+            let c2 = read8(REG_CONFIG2); c2 = (c2 & 0xCF) | 0x00; write8(REG_CONFIG2, c2)
+            write8(REG_GCONF2, (0b01 << 5) | (0b00 << 3) | 0b010)
+            write8(REG_GPULSE, (0b01 << 6) | 12)
+            write8(REG_GPENTH, 0x20); write8(REG_GEXTH, 0x14)
+        }
+
+        // GIEN + GMODE aktiv, FIFO leeren
+        let g4 = read8(REG_GCONF4); g4 |= 0x03; write8(REG_GCONF4, g4)
+        clearGestureFIFO()
+
+        // Entprellung zurücksetzen
+        _lastGesture = GestureDirection.None
+        _cooldownUntil = 0
+        _lockAxis = 0
+    }
+
+    // ===== LESEN =====
+
+    /**
+     * Proximity lesen (0..255)
+     */
+    //% block="Proximity lesen" group="Lesen" weight=95 color=#5C9DFF
     export function readProximity(): number {
         return read8(REG_PDATA)
     }
 
-    // ---- Gesten-Enum ----
-    export enum GestureDirection {
-        //% block="keine"
-        None = 0,
-        //% block="hoch"
-        Up = 1,
-        //% block="runter"
-        Down = 2,
-        //% block="links"
-        Left = 3,
-        //% block="rechts"
-        Right = 4,
-    }
 
-    // ---- Gesten-Detektion (robustere Heuristik) ----
-    function readGestureInternal(): GestureDirection {
-        // Prüfe GSTATUS GVALID
+
+    /**
+     * Geste lesen (Enum). Nutzt GSTATUS/GFLVL und robuste Heuristik mit Rauschfilter.
+     */
+    //% block="Geste" group="Lesen" weight=94 color=#5C9DFF
+    export function gesture(): GestureDirection {
+        // GVALID prüfen
         const gstat = read8(REG_GSTATUS)
         const gvalid = (gstat & 0x01) != 0
         if (!gvalid) return GestureDirection.None
 
+        // FIFO-Level
         const level = read8(REG_GFLVL)
         if (level <= 0) return GestureDirection.None
 
+        // Summen bilden
         let sumU = 0, sumD = 0, sumL = 0, sumR = 0
         for (let i = 0; i < level; i++) {
             sumU += read8(REG_GFIFO_U)
@@ -675,169 +736,98 @@ namespace apds9960 {
         }
         clearGestureFIFO()
 
+        // Rauschfilter: Mindestenergie
+        const energy = sumU + sumD + sumL + sumR
+        if (energy < _ENERGY_MIN) return GestureDirection.None
+
         const diffUD = sumU - sumD
         const diffLR = sumL - sumR
-        const TH = 20 // etwas niedrigere Schwelle
 
-        if (Math.abs(diffUD) > Math.abs(diffLR)) {
-            if (diffUD > TH) return GestureDirection.Up
-            if (diffUD < -TH) return GestureDirection.Down
+        // Achse mit größerer Differenz dominiert
+        if (Math.abs(diffUD) >= Math.abs(diffLR)) {
+            if (diffUD > _TH) return GestureDirection.Up
+            if (diffUD < -_TH) return GestureDirection.Down
         } else {
-            if (diffLR > TH) return GestureDirection.Left
-            if (diffLR < -TH) return GestureDirection.Right
+            if (diffLR > _TH) return GestureDirection.Left
+            if (diffLR < -_TH) return GestureDirection.Right
+        }
+        return GestureDirection.None
+    }
+
+    // Hilfsfunktionen für Entprellung
+    function axisOf(dir: GestureDirection): number {
+        if (dir == GestureDirection.Up || dir == GestureDirection.Down) return 1 // vert
+        if (dir == GestureDirection.Left || dir == GestureDirection.Right) return 2 // horiz
+        return 0
+    }
+
+    /**
+     * Gestenänderung (entprellt):
+     * - prüft Proximity-Gate
+     * - Achsen-Lock (keine Flip-Flops)
+     * - Cooldown (nur eine Meldung pro Wisch)
+     * Gibt nur eine neue Richtung zurück, sonst "keine".
+     */
+    //% block="Gestenänderung (entprellt)" group="Lesen" weight=93 color=#5C9DFF
+    export function gestureChangedDebounced(): GestureDirection {
+        const now = control.millis()
+        if (now < _cooldownUntil) return GestureDirection.None
+
+        // Proximity-Gate
+        const prox = readProximity()
+        if (prox <= _PROX_GATE) { _lockAxis = 0; return GestureDirection.None }
+
+        const g = gesture()
+        if (g == GestureDirection.None) return GestureDirection.None
+
+        const ax = axisOf(g)
+        if (_lockAxis == 0) _lockAxis = ax
+        else if (_lockAxis != ax) return GestureDirection.None // widersprechende Richtung ignorieren
+
+        if (g != _lastGesture) {
+            _lastGesture = g
+            _cooldownUntil = now + _COOLDOWN_MS
+            _lockAxis = 0
+            return g
         }
         return GestureDirection.None
     }
 
     /**
-     * Block: Geste
+     * Geste als Pfeil auf der LED-Matrix anzeigen (kurz)
      */
-    //% block="Geste"
-    //% weight=85 color=#5C9DFF
-    export function gesture(): GestureDirection {
-        return readGestureInternal()
-    }
-
-    /**
-     * Optional: Gesten-Text
-     */
-    //% block="Gesten-Text"
-    //% weight=79 color=#5C9DFF
-    export function gestureText(): string {
-        const dir = readGestureInternal()
-        switch (dir) {
-            case GestureDirection.Up: return "UP"
-            case GestureDirection.Down: return "DOWN"
-            case GestureDirection.Left: return "LEFT"
-            case GestureDirection.Right: return "RIGHT"
-            default: return "keine"
-        }
-    }
-
-    /** Zusatzfunktion Gesten */
-
-    // ====== interner Zustand für "nur bei Änderung" ======
-    let _lastGesture: GestureDirection = GestureDirection.None
-
-    /**
-     * Gestenänderung erkennen (liefert nur eine Geste, wenn sie sich
-     * gegenüber der letzten erkannten Geste geändert hat; sonst "keine")
-     */
-    //% block="Gestenänderung"
-    //% group="Lesen" weight=84 color=#5C9DFF
-    export function gestureChanged(): GestureDirection {
-        const now = gesture() // nutzt deine vorhandene Gesten-Logik
-        if (now != GestureDirection.None && now != _lastGesture) {
-            _lastGesture = now
-            return now
-        }
-        return GestureDirection.None
-    }
-
-    /**
-     * Geste als Pfeil auf der LED-Matrix anzeigen
-     * (zeigt kurz einen Pfeil und löscht anschließend die Matrix)
-     */
-    //% block="Geste auf Matrix anzeigen %dir"
-    //% group="Lesen" weight=83 color=#5C9DFF
+    //% block="Geste auf Matrix anzeigen %dir" group="Lesen" weight=92 color=#5C9DFF
     export function showGestureOnMatrix(dir: GestureDirection): void {
         switch (dir) {
-            case GestureDirection.Up:
-                basic.showArrow(ArrowNames.North); break
-            case GestureDirection.Down:
-                basic.showArrow(ArrowNames.South); break
-            case GestureDirection.Left:
-                basic.showArrow(ArrowNames.West); break
-            case GestureDirection.Right:
-                basic.showArrow(ArrowNames.East); break
-            default:
-                return
+            case GestureDirection.Up: basic.showArrow(ArrowNames.North); break
+            case GestureDirection.Down: basic.showArrow(ArrowNames.South); break
+            case GestureDirection.Left: basic.showArrow(ArrowNames.West); break
+            case GestureDirection.Right: basic.showArrow(ArrowNames.East); break
+            default: return
         }
         basic.pause(250)
         basic.clearScreen()
     }
 
     /**
-     * Gesten-Reichweite erhöhen
-     * - LED-Boost: 4x
-     * - LED-Drive: 100 mA
-     * - Gesture-Gain: 8x
-     * - Wait-Time: moderat länger
-     * - Pulse Count: höher
-     * - Entry/Exit-Thresholds angepasst
+     * CLR lesen (wartet auf AVALID, vermeidet konstante/alte Werte)
      */
-    //% block="Gesten-Reichweite erhöhen"
-    //% group="Konfiguration" weight=60 color=#5C9DFF
-    export function increaseGestureRange(): void {
-        // CONFIG2 (0x90): LEDBOOST Bits 5:4 -> 0b11 = 4x
-        let c2 = read8(0x90)
-        c2 = (c2 & 0xCF) | 0x30
-        write8(0x90, c2)
-
-        // GCONF2 (0xA3): GGAIN=0b11 (8x), GLDRIVE=0b10 (100mA), GWTIME=0b011 (~8.4ms)
-        // Bits: [6:5]=GGAIN, [4:3]=GLDRIVE, [2:0]=GWTIME
-        write8(0xA3, (0b11 << 5) | (0b10 << 3) | 0b011)
-
-        // GPULSE (0xA6): GPLEN=01 (16 µs), GPULSE=24 Pulse → stärkeres Signal
-        write8(0xA6, (0b01 << 6) | 24)
-
-        // Entry / Exit Thresholds – früherer Einstieg, späterer Ausstieg
-        write8(0xA0, 0x10) // GPENTH (Entry)
-        write8(0xA1, 0x08) // GEXTH (Exit)
-
-        // GIEN + GMODE sicherstellen
-        let g4 = read8(0xAB)
-        g4 |= 0x03 // Bit1=GIEN, Bit0=GMODE
-        write8(0xAB, g4)
-
-        // FIFO leeren für frischen Start
-        clearGestureFIFO()
-    }
-
-/**
- * Gestenänderung als Text zurückgeben ("UP/DOWN/LEFT/RIGHT" oder "keine")
- * – praktisch für serielle Ausgabe ohne doppelten Text-Spam.
-//% block="Gestenänderung (Text)"
-//% group="Lesen" weight=82 color=#5C9DFF
-export function gestureChangedText(): string {
-    const g = gestureChanged()
-    switch (g) {
-        case GestureDirection.Up: return "UP"
-        case GestureDirection.Down: return "DOWN"
-        case GestureDirection.Left: return "LEFT"
-        case GestureDirection.Right: return "RIGHT"
-               default: return "keine"
-    }
-
-
-
-
-    /**
-     * CLR lesen (wartet auf AVALID, um konstante Werte zu vermeiden)
-     */
-    //% block="CLR lesen"
-    //% weight=78 color=#5C9DFF
+    //% block="CLR lesen" group="Lesen" weight=91 color=#5C9DFF
     export function readClear(): number {
         waitALSValid(60)
         return read16LE(REG_CDATA_L)
     }
-
-    //% block="Rot lesen"
-    //% weight=77 color=#E74C3C
+    //% block="Rot lesen" group="Lesen" weight=90 color=#E74C3C
     export function readRed(): number {
         waitALSValid(60)
         return read16LE(REG_RDATA_L)
     }
-
-    //% block="Grün lesen"
-    //% weight=76 color=#27AE60
+    //% block="Grün lesen" group="Lesen" weight=89 color=#27AE60
     export function readGreen(): number {
         waitALSValid(60)
         return read16LE(REG_GDATA_L)
     }
-
-    //% block="Blau lesen"
-    //% weight=75 color=#2980B9
+    //% block="Blau lesen" group="Lesen" weight=88 color=#2980B9
     export function readBlue(): number {
         waitALSValid(60)
         return read16LE(REG_BDATA_L)

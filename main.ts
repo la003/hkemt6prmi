@@ -510,3 +510,213 @@ namespace HKEMT6PrMi {
     //Farbsensor
 
 }
+
+
+
+
+
+// APDS9960 MakeCode Extension (micro:bit)
+// Aktiviert/Deaktiviert ALS, Proximity & Gesture und stellt Lese-Blöcke bereit.
+// I2C-Adresse fix 0x39; Register laut Datenblatt (ENABLE 0x80, GCONF4 0xAB, usw.)
+
+namespace apds9960 {
+    // ---- Konstanten (Register) ----
+    const I2C_ADDR = 0x39
+    const REG_ENABLE = 0x80
+    const REG_ATIME = 0x81
+    const REG_ID = 0x92
+    const REG_STATUS = 0x93
+
+    const REG_CDATA_L = 0x94 // Clear (low/high)
+    const REG_RDATA_L = 0x96 // Rot
+    const REG_GDATA_L = 0x98 // Grün
+    const REG_BDATA_L = 0x9A // Blau
+
+    const REG_PDATA = 0x9C // Proximity (8-bit)
+    const REG_GCONF4 = 0xAB // Gesture: [2]=GFIFO_CLR, [1]=GIEN, [0]=GMODE
+    const REG_GFLVL = 0xAE // Gesture FIFO Level
+    const REG_GSTATUS = 0xAF // [0]=GVALID
+
+    const REG_GFIFO_U = 0xFC
+    const REG_GFIFO_D = 0xFD
+    const REG_GFIFO_L = 0xFE
+    const REG_GFIFO_R = 0xFF
+
+    // ENABLE-Bits (0x80)
+    const PON = 0x01   // Power ON
+    const AEN = 0x02   // ALS enable
+    const PEN = 0x04   // Proximity enable
+    const GEN = 0x40   // Gesture enable
+
+    // ---- I2C-Helfer ----
+    function write8(reg: number, value: number) {
+        const buf = pins.createBuffer(2)
+        buf[0] = reg
+        buf[1] = value & 0xFF
+        pins.i2cWriteBuffer(I2C_ADDR, buf)
+    }
+    function read8(reg: number): number {
+        pins.i2cWriteNumber(I2C_ADDR, reg, NumberFormat.UInt8BE)
+        return pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt8BE) & 0xFF
+    }
+    function read16LE(loReg: number): number {
+        const lo = read8(loReg)
+        const hi = read8(loReg + 1)
+        return (hi << 8) | lo
+    }
+
+    // ---- interne Minimal-Init ----
+    function minimalInit() {
+        const id = read8(REG_ID) // 0xAB oder 0xA8 sind üblich
+        // ALS-Integrationszeit: 219 (~103 ms) als brauchbarer Default
+        write8(REG_ATIME, 219)
+        // (weitere Defaults – Gain/LED-Drive – können bei Bedarf ergänzt werden)
+    }
+
+    // ---- Gesture-Mode setzen/clearen ----
+    function setGestureMode(on: boolean) {
+        let v = read8(REG_GCONF4)
+        v = on ? (v | 0x01) : (v & ~0x01) // GMODE Bit0
+        write8(REG_GCONF4, v)
+    }
+    function clearGestureFIFO() {
+        let v = read8(REG_GCONF4)
+        v = v | 0x04 // GFIFO_CLR Bit2
+        write8(REG_GCONF4, v)
+        v = v & ~0x04
+        write8(REG_GCONF4, v)
+    }
+
+    /**
+     * Sensor anschalten:
+     * Power ON, minimal init, ALS+Proximity+Gesture aktivieren
+     * und Gesture-Mode direkt starten.
+     */
+    //% block="Sensor anschalten"
+    //% weight=90 color=#5C9DFF icon="\uf2db"
+    export function powerOnSensor(): void {
+        minimalInit()
+        write8(REG_ENABLE, PON | AEN | PEN | GEN)
+        setGestureMode(true) // GMODE=1
+    }
+
+    /**
+     * Sensor ausschalten:
+     * Alle Engines deaktivieren und GMODE beenden.
+     */
+    //% block="Sensor ausschalten"
+    //% weight=89 color=#5C9DFF icon="\uf011"
+    export function powerOffSensor(): void {
+        write8(REG_ENABLE, 0x00) // Engines aus
+        setGestureMode(false)
+        clearGestureFIFO()
+    }
+
+    /**
+     * Proximity lesen (0..255).
+     */
+    //% block="Proximity lesen"
+    //% weight=80 color=#5C9DFF
+    export function readProximity(): number {
+        return read8(REG_PDATA) // 0..255
+    }
+
+    // Richtungen für Gesten
+    export enum GestureDirection {
+        //% block="keine"
+        None = 0,
+        //% block="hoch"
+        Up = 1,
+        //% block="runter"
+        Down = 2,
+        //% block="links"
+        Left = 3,
+        //% block="rechts"
+        Right = 4,
+    }
+
+    // interne Gesten-Detektion (FIFO auslesen, Differenzen bilden)
+    function readGestureInternal(): GestureDirection {
+        const gstat = read8(REG_GSTATUS)
+        const gvalid = (gstat & 0x01) != 0
+        if (!gvalid) return GestureDirection.None
+
+        const level = read8(REG_GFLVL) // Anzahl Datensätze im FIFO
+        if (level <= 0) return GestureDirection.None
+
+        let sumU = 0, sumD = 0, sumL = 0, sumR = 0
+        for (let i = 0; i < level; i++) {
+            sumU += read8(REG_GFIFO_U)
+            sumD += read8(REG_GFIFO_D)
+            sumL += read8(REG_GFIFO_L)
+            sumR += read8(REG_GFIFO_R)
+        }
+        clearGestureFIFO()
+
+        const diffUD = sumU - sumD
+        const diffLR = sumL - sumR
+        const TH = 30 // Schwelle – ggf. projektabhängig anpassbar
+
+        if (Math.abs(diffUD) > Math.abs(diffLR)) {
+            if (diffUD > TH) return GestureDirection.Up
+            if (diffUD < -TH) return GestureDirection.Down
+        } else {
+            if (diffLR > TH) return GestureDirection.Left
+            if (diffLR < -TH) return GestureDirection.Right
+        }
+        return GestureDirection.None
+    }
+
+    /**
+     * Block: Geste
+     * Gibt die erkannte Richtung als Enum zurück (hoch/runter/links/rechts/keine).
+     */
+    //% block="Geste"
+    //% weight=85 color=#5C9DFF
+    export function gesture(): GestureDirection {
+        return readGestureInternal()
+    }
+
+    /**
+     * Optional: Gesten-Text ("UP/DOWN/LEFT/RIGHT" oder "keine")
+     */
+    //% block="Gesten-Text"
+    //% weight=79 color=#5C9DFF
+    export function gestureText(): string {
+        const dir = readGestureInternal()
+        switch (dir) {
+            case GestureDirection.Up: return "UP"
+            case GestureDirection.Down: return "DOWN"
+            case GestureDirection.Left: return "LEFT"
+            case GestureDirection.Right: return "RIGHT"
+            default: return "keine"
+        }
+    }
+
+    /**
+     * Clear/Rot/Grün/Blau lesen (16-bit Werte 0..65535).
+     */
+    //% block="CLR lesen"
+    //% weight=78 color=#5C9DFF
+    export function readClear(): number {
+        return read16LE(REG_CDATA_L)
+    }
+
+    //% block="Rot lesen"
+    //% weight=77 color=#E74C3C
+    export function readRed(): number {
+        return read16LE(REG_RDATA_L)
+    }
+
+    //% block="Grün lesen"
+    //% weight=76 color=#27AE60
+    export function readGreen(): number {
+        return read16LE(REG_GDATA_L)
+    }
+
+    //% block="Blau lesen"
+    //% weight=75 color=#2980B9
+    export function readBlue(): number {
+        return read16LE(REG_BDATA_L)
+    }
+}

@@ -20,6 +20,8 @@ namespace HKEMT6PrMi {
         Servo8 = 0x7B,
     }
     //% block="Bewege %adresse auf %position Grad"
+    //% group="Servomotor"
+    //% weight=99 blockGap=16
     //% adresse.defl=ServoAdresse.Servo1
     //% position.min=0 position.max=180
     export function servoBewegen(adresse: ServomotorAdresse, position: number) {
@@ -54,6 +56,8 @@ namespace HKEMT6PrMi {
         Taster8 = 0x77,
     }
     //% block="Zustand %adresse"
+    //% group="Taster"
+    //% weight=99 blockGap=16
     //% adresse.defl=TasterAdresse.Taster1
     export function Taster_Abfrage(adresse: TasterAdresse): Boolean {
         let zustand = pins.i2cReadNumber(adresse, NumberFormat.UInt8BE)

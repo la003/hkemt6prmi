@@ -471,7 +471,7 @@ namespace HKEMT6PrMi {
         writeReg(R_ENABLE, 0x00)
 
         // ALS/Wait Integrationszeiten (SparkFun-Defaults)
-        writeReg(R_ATIME, 219)  // ~103ms
+        writeReg(R_ATIME, 255)  // ~103ms
         writeReg(R_WTIME, 246)  // ~27ms
         writeReg(R_PERS, 0x11)  // 2 aufeinanderfolgende Events für Interrupt
 

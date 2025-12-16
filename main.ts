@@ -484,7 +484,8 @@ namespace HKEMT6PrMi {
 
 //neue Kategorie
 
-// APDS9960 MakeCode Extension (micro:bit) — stabile Defaults + optionales Gestenprofil
+
+// APDS9960 MakeCode Extension (micro:bit) — stabile Defaults + optionales Gestenprofil + Gesten-Text
 // I2C-Adresse fix 0x39; zentrale Register:
 // ENABLE(0x80): PON/AEN/PEN/GEN; CONFIG2(0x90): LEDBOOST
 // GCONF1..4(0xA2..0xAB): Gesture-Konfiguration; GPULSE(0xA6)
@@ -533,20 +534,6 @@ namespace apds9960 {
     const PEN = 0x04
     const GEN = 0x40
 
-    // Richtungen für Gesten
-    export enum GestureDirection {
-        //% block="keine"
-        None = 0,
-        //% block="hoch"
-        Up = 1,
-        //% block="runter"
-        Down = 2,
-        //% block="links"
-        Left = 3,
-        //% block="rechts"
-        Right = 4,
-    }
-
     // ---- I2C-Helfer ----
     function write8(reg: number, value: number) {
         const buf = pins.createBuffer(2)
@@ -562,6 +549,20 @@ namespace apds9960 {
         const lo = read8(loReg)
         const hi = read8(loReg + 1)
         return (hi << 8) | lo
+    }
+
+    // Richtungen für Gesten
+    export enum GestureDirection {
+        //% block="keine"
+        None = 0,
+        //% block="hoch"
+        Up = 1,
+        //% block="runter"
+        Down = 2,
+        //% block="links"
+        Left = 3,
+        //% block="rechts"
+        Right = 4,
     }
 
     // ---- interner Zustand für Entprellung ----
@@ -705,7 +706,7 @@ namespace apds9960 {
     /**
      * Proximity lesen (0..255)
      */
-    //% block="Proximity lesen" group="Lesen" weight=95 color=#5C9DFF
+    //% block="Proximity lesen" group="Lesen" weight=97 color=#5C9DFF
     export function readProximity(): number {
         return read8(REG_PDATA)
     }
@@ -715,7 +716,7 @@ namespace apds9960 {
     /**
      * Geste lesen (Enum). Nutzt GSTATUS/GFLVL und robuste Heuristik mit Rauschfilter.
      */
-    //% block="Geste" group="Lesen" weight=94 color=#5C9DFF
+    //% block="Geste" group="Lesen" weight=95 color=#5C9DFF
     export function gesture(): GestureDirection {
         // GVALID prüfen
         const gstat = read8(REG_GSTATUS)
@@ -754,6 +755,22 @@ namespace apds9960 {
         return GestureDirection.None
     }
 
+    // *** NEU: Gesten-Text (aktueller Status als String) ***
+    /**
+     * Gesten-Text: Gibt "UP/DOWN/LEFT/RIGHT" oder "keine" zurück.
+     */
+    //% block="Gesten-Text" group="Lesen" weight=96 color=#5C9DFF
+    export function gestureText(): string {
+        const dir = gesture()
+        switch (dir) {
+            case GestureDirection.Up: return "UP"
+            case GestureDirection.Down: return "DOWN"
+            case GestureDirection.Left: return "LEFT"
+            case GestureDirection.Right: return "RIGHT"
+            default: return "keine"
+        }
+    }
+
     // Hilfsfunktionen für Entprellung
     function axisOf(dir: GestureDirection): number {
         if (dir == GestureDirection.Up || dir == GestureDirection.Down) return 1 // vert
@@ -768,7 +785,7 @@ namespace apds9960 {
      * - Cooldown (nur eine Meldung pro Wisch)
      * Gibt nur eine neue Richtung zurück, sonst "keine".
      */
-    //% block="Gestenänderung (entprellt)" group="Lesen" weight=93 color=#5C9DFF
+    //% block="Gestenänderung (entprellt)" group="Lesen" weight=94 color=#5C9DFF
     export function gestureChangedDebounced(): GestureDirection {
         const now = control.millis()
         if (now < _cooldownUntil) return GestureDirection.None
@@ -796,7 +813,7 @@ namespace apds9960 {
     /**
      * Geste als Pfeil auf der LED-Matrix anzeigen (kurz)
      */
-    //% block="Geste auf Matrix anzeigen %dir" group="Lesen" weight=92 color=#5C9DFF
+    //% block="Geste auf Matrix anzeigen %dir" group="Lesen" weight=93 color=#5C9DFF
     export function showGestureOnMatrix(dir: GestureDirection): void {
         switch (dir) {
             case GestureDirection.Up: basic.showArrow(ArrowNames.North); break
@@ -812,22 +829,22 @@ namespace apds9960 {
     /**
      * CLR lesen (wartet auf AVALID, vermeidet konstante/alte Werte)
      */
-    //% block="CLR lesen" group="Lesen" weight=91 color=#5C9DFF
+    //% block="CLR lesen" group="Lesen" weight=92 color=#5C9DFF
     export function readClear(): number {
         waitALSValid(60)
         return read16LE(REG_CDATA_L)
     }
-    //% block="Rot lesen" group="Lesen" weight=90 color=#E74C3C
+    //% block="Rot lesen" group="Lesen" weight=91 color=#E74C3C
     export function readRed(): number {
         waitALSValid(60)
         return read16LE(REG_RDATA_L)
     }
-    //% block="Grün lesen" group="Lesen" weight=89 color=#27AE60
+    //% block="Grün lesen" group="Lesen" weight=90 color=#27AE60
     export function readGreen(): number {
         waitALSValid(60)
         return read16LE(REG_GDATA_L)
     }
-    //% block="Blau lesen" group="Lesen" weight=88 color=#2980B9
+    //% block="Blau lesen" group="Lesen" weight=89 color=#2980B9
     export function readBlue(): number {
         waitALSValid(60)
         return read16LE(REG_BDATA_L)

@@ -826,6 +826,42 @@ namespace apds9960 {
         basic.clearScreen()
     }
 
+
+    // --- interner Zustand (Text) ---
+    let _lastTextEmitted = "__INIT__"
+    let _lastTextTimestamp = 0
+
+    /**
+     * Gesten-Text mit Anti-Wiederholung (auch "keine" wird ausgegeben).
+     * Gibt "" (leer) zurück, wenn der Text gleich dem zuletzt ausgegebenen ist.
+     *
+     * @param allowSameAfterMs  Wenn >0, darf derselbe Text nach Ablauf dieser Zeit erneut ausgegeben werden.
+     *                          Standard 0 = niemals direkt nacheinander nochmal ausgeben.
+     */
+    //% block="Gesten-Text (keine Wiederholung) (Timeout %allowSameAfterMs ms)"
+    //% group="Lesen" weight=98 color=#5C9DFF
+    //% allowSameAfterMs.defl=10000
+    export function gestureTextNoRepeatIncludingNone(allowSameAfterMs: number = 0): string {
+        const now = control.millis()
+        const txt = gestureText() // nutzt deinen bestehenden Gesten-Text-Block: "UP/DOWN/LEFT/RIGHT/keine"
+
+        // Falls gleiche Ausgabe wie zuletzt:
+        if (txt == _lastTextEmitted) {
+            // Timeout-Regel: nach X ms darf derselbe Zustand wieder ausgegeben werden
+            if (allowSameAfterMs > 0 && now - _lastTextTimestamp >= allowSameAfterMs) {
+                _lastTextTimestamp = now
+                return txt
+            }
+            // sonst keine Ausgabe (leer)
+            return ""
+        }
+
+        // Neuer Zustand: ausgeben und merken
+        _lastTextEmitted = txt
+        _lastTextTimestamp = now
+        return txt
+    }
+
     /**
      * CLR lesen (wartet auf AVALID, vermeidet konstante/alte Werte)
      */

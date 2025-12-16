@@ -714,6 +714,104 @@ namespace apds9960 {
         }
     }
 
+    /** Zusatzfunktion Gesten */
+
+    // ====== interner Zustand für "nur bei Änderung" ======
+    let _lastGesture: GestureDirection = GestureDirection.None
+
+    /**
+     * Gestenänderung erkennen (liefert nur eine Geste, wenn sie sich
+     * gegenüber der letzten erkannten Geste geändert hat; sonst "keine")
+     */
+    //% block="Gestenänderung"
+    //% group="Lesen" weight=84 color=#5C9DFF
+    export function gestureChanged(): GestureDirection {
+        const now = gesture() // nutzt deine vorhandene Gesten-Logik
+        if (now != GestureDirection.None && now != _lastGesture) {
+            _lastGesture = now
+            return now
+        }
+        return GestureDirection.None
+    }
+
+    /**
+     * Geste als Pfeil auf der LED-Matrix anzeigen
+     * (zeigt kurz einen Pfeil und löscht anschließend die Matrix)
+     */
+    //% block="Geste auf Matrix anzeigen %dir"
+    //% group="Lesen" weight=83 color=#5C9DFF
+    export function showGestureOnMatrix(dir: GestureDirection): void {
+        switch (dir) {
+            case GestureDirection.Up:
+                basic.showArrow(ArrowNames.North); break
+            case GestureDirection.Down:
+                basic.showArrow(ArrowNames.South); break
+            case GestureDirection.Left:
+                basic.showArrow(ArrowNames.West); break
+            case GestureDirection.Right:
+                basic.showArrow(ArrowNames.East); break
+            default:
+                return
+        }
+        basic.pause(250)
+        basic.clearScreen()
+    }
+
+    /**
+     * Gesten-Reichweite erhöhen
+     * - LED-Boost: 4x
+     * - LED-Drive: 100 mA
+     * - Gesture-Gain: 8x
+     * - Wait-Time: moderat länger
+     * - Pulse Count: höher
+     * - Entry/Exit-Thresholds angepasst
+     */
+    //% block="Gesten-Reichweite erhöhen"
+    //% group="Konfiguration" weight=60 color=#5C9DFF
+    export function increaseGestureRange(): void {
+        // CONFIG2 (0x90): LEDBOOST Bits 5:4 -> 0b11 = 4x
+        let c2 = read8(0x90)
+        c2 = (c2 & 0xCF) | 0x30
+        write8(0x90, c2)
+
+        // GCONF2 (0xA3): GGAIN=0b11 (8x), GLDRIVE=0b10 (100mA), GWTIME=0b011 (~8.4ms)
+        // Bits: [6:5]=GGAIN, [4:3]=GLDRIVE, [2:0]=GWTIME
+        write8(0xA3, (0b11 << 5) | (0b10 << 3) | 0b011)
+
+        // GPULSE (0xA6): GPLEN=01 (16 µs), GPULSE=24 Pulse → stärkeres Signal
+        write8(0xA6, (0b01 << 6) | 24)
+
+        // Entry / Exit Thresholds – früherer Einstieg, späterer Ausstieg
+        write8(0xA0, 0x10) // GPENTH (Entry)
+        write8(0xA1, 0x08) // GEXTH (Exit)
+
+        // GIEN + GMODE sicherstellen
+        let g4 = read8(0xAB)
+        g4 |= 0x03 // Bit1=GIEN, Bit0=GMODE
+        write8(0xAB, g4)
+
+        // FIFO leeren für frischen Start
+        clearGestureFIFO()
+    }
+
+/**
+ * Gestenänderung als Text zurückgeben ("UP/DOWN/LEFT/RIGHT" oder "keine")
+ * – praktisch für serielle Ausgabe ohne doppelten Text-Spam.
+//% block="Gestenänderung (Text)"
+//% group="Lesen" weight=82 color=#5C9DFF
+export function gestureChangedText(): string {
+    const g = gestureChanged()
+    switch (g) {
+        case GestureDirection.Up: return "UP"
+        case GestureDirection.Down: return "DOWN"
+        case GestureDirection.Left: return "LEFT"
+        case GestureDirection.Right: return "RIGHT"
+               default: return "keine"
+    }
+
+
+
+
     /**
      * CLR lesen (wartet auf AVALID, um konstante Werte zu vermeiden)
      */

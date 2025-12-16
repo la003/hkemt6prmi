@@ -767,7 +767,7 @@ namespace apds9960 {
             case GestureDirection.Down: return "DOWN"
             case GestureDirection.Left: return "LEFT"
             case GestureDirection.Right: return "RIGHT"
-            default: return "keine"
+            default: return ""
         }
     }
 

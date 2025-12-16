@@ -152,46 +152,7 @@ namespace HKEMT6PrMi {
     }
     //SCHRITTMOTOR
 
-    //FARBSENSOR
-    export enum FarbsensorAdresse {
-        //% block="Farbsensor_1"
-        Farbsensor1 = 0x0A,
-        //% block="Farbsensor_2"
-        Farbsensor2 = 0x1A,
-        //% block="Farbsensor_3"
-        Farbsensor3 = 0x2A,
-        //% block="Farbsensor_4"
-        Farbsensor4 = 0x3A,
-        //% block="Farbsensor_5"
-        Farbsensor5 = 0x4A,
-        //% block="Farbsensor_6"
-        Farbsensor6 = 0x5A,
-        //% block="Farbsensor_7"
-        Farbsensor7 = 0x6A,
-        //% block="Farbsensor_8"
-        Farbsensor8 = 0x7A,
-    }
-    //% block="%adresse erkennt Farbe %farbe"
-    //% adresse.defl=Farbsensor.Farbsensor1
-    export function Farbsensor_Farberkennung(adresse: FarbsensorAdresse): string {
-        let Farbwert = pins.i2cReadNumber(adresse, NumberFormat.UInt16BE)
-        let Farbe = ""
-        if (Farbwert == 0) {Farbe = "Schwarz"}
-        else if (Farbwert > 0 && Farbwert <= 50) {Farbe = "Rot"}
-        else if (Farbwert > 50 && Farbwert <= 100) { Farbe = "Blau" }
-        else if (Farbwert > 100 && Farbwert <= 150) { Farbe = "Grün" }
-        else if (Farbwert > 150 && Farbwert <= 200) { Farbe = "Gelb" }
-        else if (Farbwert > 200 && Farbwert <= 255) { Farbe = "Weiß" }
-        else {Farbe = "Unbekannt"}
-        return Farbe
-    }
-    //% block="%adresse erkannter Wert %Farbwert"
-    //% adresse.defl=Farbsensor.Farbsensor1
-    export function Farbsensor_Farbwert(adresse: FarbsensorAdresse): number {
-        let Farbwert = pins.i2cReadNumber(adresse, NumberFormat.UInt16BE)
-        return Farbwert
-    }
-    //FARBSENSOR
+    
 
 
 //TESTABSCHNITT
@@ -515,6 +476,9 @@ namespace HKEMT6PrMi {
 
 
 
+
+
+//neue Kategorie
 // APDS9960 MakeCode Extension (micro:bit) – robuste Defaults für Gesture & ALS
 // I2C-Adresse fix 0x39; wichtige Register & Bits laut Datenblatt:
 // ENABLE(0x80): PON/AEN/PEN/GEN; GCONF1..4(0xA2..0xAB); GPULSE(0xA6); CONFIG2(0x90)

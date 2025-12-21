@@ -156,7 +156,7 @@ namespace HKEMT6PrMi {
         //% block="Schrittmotor_8"
         Schrittmotor8 = 0x7D,
     }
-    //% block="Bewege %adresse mit %geschwindigkeit in °/s um %positionsaenderung Grad"
+    //% block="Bewege %adresse mit %geschwindigkeit °/s um %positionsaenderung Grad"
     //% group="Schrittmotor"
     //% weight=99 blockGap=16
     //% adresse.defl=SchrittmotorAdresse.Schrittmotor1

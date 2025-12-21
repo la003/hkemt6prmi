@@ -1,4 +1,4 @@
-//% color=#000000 icon="\f1e6"
+//% color=#000000 icon="\uf2db"
 namespace MT6PrHKEMi {
 
     //SERVOMOTOR

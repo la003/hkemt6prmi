@@ -1,4 +1,5 @@
-namespace HKEMT6PrMi {
+//% color=#000000 icon="\f1e6"
+namespace MT6PrHKEMi {
 
     //SERVOMOTOR
     export enum ServomotorAdresse {
@@ -328,7 +329,7 @@ namespace HKEMT6PrMi {
     /**
      * Sensor anschalten (fixe, ausgewogene Defaults; PON/AEN/PEN/GEN; GMODE/GIEN; FIFO clear)
      */
-    //% block="Sensor anschalten" group="Farbsensor" weight=100 color=#5C9DFF icon="\uf2db"
+    //% block="Sensor anschalten" group="Farbsensor" weight=100 icon="\uf2db"
     export function powerOnSensor(): void {
         initStableBalanced()
         write8(REG_ENABLE, PON | AEN | PEN | GEN)
@@ -345,7 +346,7 @@ namespace HKEMT6PrMi {
     /**
      * Sensor ausschalten
      */
-    //% block="Sensor ausschalten" group="Farbsensor" weight=99 color=#5C9DFF icon="\uf011"
+    //% block="Sensor ausschalten" group="Farbsensor" weight=99 icon="\uf011"
     export function powerOffSensor(): void {
         write8(REG_ENABLE, 0x00)
         setGestureMode(false)
@@ -365,7 +366,7 @@ namespace HKEMT6PrMi {
      * Helligkeit lesen (ehemals CLR)
      * Hinweis: Wartet, bis gültige ALS-Daten vorliegen.
      */
-    //% block="Helligkeit lesen" group="Farbsensor" weight=92 color=#5C9DFF
+    //% block="Helligkeit lesen" group="Farbsensor" weight=92
     export function readBrightness(): number {
         waitALSValid(60)
         return read16LE(REG_CDATA_L)
@@ -406,9 +407,9 @@ namespace HKEMT6PrMi {
     // ---------------------------
 
     /**
-     * Abstand lesen (0..255) – ehemals Proximity
+     * Abstand lesen (0..255)
      */
-    //% block="Abstand lesen" group="Farbsensor" weight=87 color=#5C9DFF
+    //% block="Abstand lesen" group="Farbsensor" weight=87
     export function readDistance(): number {
         return read8(REG_PDATA)
     }
@@ -459,7 +460,7 @@ namespace HKEMT6PrMi {
      * @param repeat    true = gleiche Geste darf direkt erneut ausgegeben werden
      * @param timeoutMs >0 = gleiche Geste erst nach Ablauf erneut zulassen
      */
-    //% block="Geste (Wiederholung %repeat Timeout %timeoutMs ms)" group="Farbsensor" weight=85 color=#5C9DFF
+    //% block="Geste (Wiederholung %repeat Timeout %timeoutMs ms)" group="Farbsensor" weight=85 
     //% repeat.defl=true timeoutMs.defl=0
     export function gesture(repeat: boolean = true, timeoutMs: number = 0): GestureDirection {
         const now = control.millis()
@@ -486,7 +487,7 @@ namespace HKEMT6PrMi {
      * @param repeat    true = gleicher Text darf direkt erneut ausgegeben werden
      * @param timeoutMs >0 = gleicher Text erst nach Ablauf erneut zulassen
      */
-    //% block="Gesten-Text (Wiederholung %repeat Timeout %timeoutMs ms)" group="Farbsensor" weight=84 color=#5C9DFF
+    //% block="Gesten-Text (Wiederholung %repeat Timeout %timeoutMs ms)" group="Farbsensor" weight=84
     //% repeat.defl=true timeoutMs.defl=0
     export function gestureText(repeat: boolean = true, timeoutMs: number = 0): string {
         const now = control.millis()

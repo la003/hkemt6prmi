@@ -175,30 +175,18 @@ namespace MT6PrHKEMi {
     }
     //SCHRITTMOTOR
 
-    
-
-
-
-//TESTABSCHNITT//////////////////////////////////
-
-
-
-    // ---------------------------
+    //FARBSENSOR
     // I2C & Registerdefinitionen
-    // ---------------------------
     const I2C_ADDR = 0x39
-
     const REG_ENABLE = 0x80
     const REG_ATIME = 0x81
     const REG_STATUS = 0x93
-
     const REG_CDATA_L = 0x94
     const REG_RDATA_L = 0x96
     const REG_GDATA_L = 0x98
     const REG_BDATA_L = 0x9A
     const REG_PDATA = 0x9C
-
-    const REG_CONFIG2 = 0x90  // LEDBOOST (Bits 5:4)
+    const REG_CONFIG2 = 0x90  
 
     // Gesture-Konfiguration
     const REG_GPENTH = 0xA0
@@ -211,7 +199,6 @@ namespace MT6PrHKEMi {
     const REG_GO_L = 0xA7
     const REG_GCONF3 = 0xAA
     const REG_GCONF4 = 0xAB
-
     const REG_GFLVL = 0xAE
     const REG_GSTATUS = 0xAF
     const REG_GFIFO_U = 0xFC
@@ -225,9 +212,7 @@ namespace MT6PrHKEMi {
     const PEN = 0x04
     const GEN = 0x40
 
-    // ---------------------------
     // I2C Helfer
-    // ---------------------------
     function write8(reg: number, value: number) {
         const buf = pins.createBuffer(2)
         buf[0] = reg
@@ -244,9 +229,7 @@ namespace MT6PrHKEMi {
         return (hi << 8) | lo
     }
 
-    // ---------------------------
     // Gesten-Enums & Filter
-    // ---------------------------
     export enum GestureDirection {
         //% block="keine"
         None = 0,
@@ -260,7 +243,6 @@ namespace MT6PrHKEMi {
         Right = 4,
     }
 
-    // Robuste Heuristik / Rauschfilter (bewährt)
     const _ENERGY_MIN = 60 // Mindestenergie in FIFO (Summe U+D+L+R)
     const _TH = 25 // Deadband für Differenzen U-D / L-R
 
@@ -270,9 +252,7 @@ namespace MT6PrHKEMi {
     let _lastTextEmitted = "" // "UP/DOWN/LEFT/RIGHT" oder "" (keine)
     let _lastTextTimestamp = 0
 
-    // ---------------------------
-    // Initialisierung (fix: ausgewogen)
-    // ---------------------------
+    // Initialisierung
     function initStableBalanced() {
         // ALS-Integrationszeit (~103 ms)
         write8(REG_ATIME, 219)
@@ -322,13 +302,7 @@ namespace MT6PrHKEMi {
         return false
     }
 
-    // ---------------------------
     // POWER
-    // ---------------------------
-
-    /**
-     * Sensor anschalten (fixe, ausgewogene Defaults; PON/AEN/PEN/GEN; GMODE/GIEN; FIFO clear)
-     */
     //% block="Sensor anschalten" group="Farbsensor" weight=100 icon="\uf2db"
     export function powerOnSensor(): void {
         initStableBalanced()
@@ -343,9 +317,6 @@ namespace MT6PrHKEMi {
         _lastTextTimestamp = 0
     }
 
-    /**
-     * Sensor ausschalten
-     */
     //% block="Sensor ausschalten" group="Farbsensor" weight=99 icon="\uf011"
     export function powerOffSensor(): void {
         write8(REG_ENABLE, 0x00)
@@ -358,57 +329,36 @@ namespace MT6PrHKEMi {
         _lastTextTimestamp = 0
     }
 
-    // ---------------------------
-    // FARBSENSOR
-    // ---------------------------
-
-    /**
-     * Helligkeit lesen (ehemals CLR)
-     * Hinweis: Wartet, bis gültige ALS-Daten vorliegen.
-     */
+    //Helligkeit lesen
     //% block="Helligkeit lesen" group="Farbsensor" weight=92
     export function readBrightness(): number {
         waitALSValid(60)
         return read16LE(REG_CDATA_L)
     }
 
-    /**
-     * Rot lesen
-     * Hinweis: Wartet, bis gültige ALS-Daten vorliegen.
-     */
+    //Rot lesen
     //% block="Rot lesen" group="Farbsensor" weight=91 color=#E74C3C
     export function readRed(): number {
         waitALSValid(60)
         return read16LE(REG_RDATA_L)
     }
 
-    /**
-     * Grün lesen
-     * Hinweis: Wartet, bis gültige ALS-Daten vorliegen.
-     */
+    //Grün lesen
     //% block="Grün lesen" group="Farbsensor" weight=90 color=#27AE60
     export function readGreen(): number {
         waitALSValid(60)
         return read16LE(REG_GDATA_L)
     }
 
-    /**
-     * Blau lesen
-     * Hinweis: Wartet, bis gültige ALS-Daten vorliegen.
-     */
+    //Blau lesen
     //% block="Blau lesen" group="Farbsensor" weight=89 color=#2980B9
     export function readBlue(): number {
         waitALSValid(60)
         return read16LE(REG_BDATA_L)
     }
 
-    // ---------------------------
-    // LESEN (Gesten & Abstand)
-    // ---------------------------
-
-    /**
-     * Abstand lesen (0..255)
-     */
+    //Gesten & Abstand
+    //Abstand lesen
     //% block="Abstand lesen" group="Farbsensor" weight=87
     export function readDistance(): number {
         return read8(REG_PDATA)

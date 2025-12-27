@@ -195,7 +195,7 @@ namespace MT6PrHKEMi {
         //% block="Farbsensor_8"
         Farbsensor8 = 0x75,
     }
-    //% adresse.defl=FarbsensorAdresse.Farbsensor1
+    //%adresse.defl=FarbsensorAdresse.Farbsensor1
     // I2C & Registerdefinitionen
     const I2C_ADDR = 0x39
     const REG_ENABLE = 0x80

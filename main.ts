@@ -176,26 +176,6 @@ namespace MT6PrHKEMi {
     //SCHRITTMOTOR
 
     //FARBSENSOR
-    //Adressen
-    export enum FarbsensorAdresse {
-        //% block="Farbsensor_1"
-        Farbsensor1 = 0x05,
-        //% block="Farbsensor_2"
-        Farbsensor2 = 0x15,
-        //% block="Farbsensor_3"
-        Farbsensor3 = 0x25,
-        //% block="Farbsensor_4"
-        Farbsensor4 = 0x35,
-        //% block="Farbsensor_5"
-        Farbsensor5 = 0x45,
-        //% block="Farbsensor_6"
-        Farbsensor6 = 0x55,
-        //% block="Farbsensor_7"
-        Farbsensor7 = 0x65,
-        //% block="Farbsensor_8"
-        Farbsensor8 = 0x75,
-    }
-    //%adresse.defl=FarbsensorAdresse.Farbsensor1
     // I2C & Registerdefinitionen
     const I2C_ADDR = 0x39
     const REG_ENABLE = 0x80
@@ -337,7 +317,7 @@ namespace MT6PrHKEMi {
         _lastTextTimestamp = 0
     }
 
-    //% block="%adresse ausschalten" group="Farbsensor" weight=99 icon="\uf011"
+    //% block="Sensor ausschalten" group="Farbsensor" weight=99 icon="\uf011"
     export function powerOffSensor(): void {
         write8(REG_ENABLE, 0x00)
         setGestureMode(false)

@@ -1,6 +1,6 @@
 {
     "name": "HKEMT6PrMi",
-    "description": "Hallo",
+    "description": "Erweiterung für den Micro-Bit um die Anbauteile des HKEMT6PrMi zu nutzen",
     "dependencies": {
         "core": "*",
         "radio": "*",

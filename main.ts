@@ -89,7 +89,7 @@ namespace MT6PrHKEMi {
     //% group="Ultraschallsensor"
     //% adresse.defl=UltraschallsensorAdresse.Ultraschallsensor1
     export function Ultraschallsensor_Wert(adresse: UltraschallsensorAdresse): number {
-        let Wert = pins.i2cReadNumber(adresse, NumberFormat.UInt16BE)
+        let Wert = pins.i2cReadNumber(adresse, NumberFormat.UInt16LE)
         return Wert
     }
     //Ultraschallsensor

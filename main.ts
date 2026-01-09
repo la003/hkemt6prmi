@@ -121,17 +121,15 @@ namespace MT6PrHKEMi {
         //% block="Rückwärts"
         GleichstrommotorBackward = 2,
     }
-    //% block="%adresse %zustand mit %drehzahl RPM"
+    //% block="%adresse %zustand"
     //% group="Gleichstrommotor"
     //% adresse.defl=GleichstrommotorAdresse.Gleichstrommotor1
     //% zustand.defl=GleichstrommotorZustand.GleichstrommotorStop
-    //% drehzahl.min=0 drehzahl.max=360
-    export function GleichstrommotorBewegen(adresse: GleichstrommotorAdresse, zustand: GleichstrommotorZustand, drehzahl: number) {
+    export function GleichstrommotorBewegen(adresse: GleichstrommotorAdresse, zustand: GleichstrommotorZustand) {
 
-        // Buffer mit 2 Byte: [Zustand][Drehzahl]
-        let buffer = pins.createBuffer(2)
+        // Buffer mit 1 Byte: [Zustand]
+        let buffer = pins.createBuffer(1)
         buffer[0] = zustand
-        buffer[1] = drehzahl
 
         // Senden über I²C
         pins.i2cWriteBuffer(adresse, buffer)

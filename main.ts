@@ -418,7 +418,7 @@ namespace MT6PrHKEMi {
             if (!repeat && g === _lastGestureEmitted) {
                 const tooSoon = (timeoutMs > 0) && ((now - _lastGestureTimestamp) < timeoutMs)
                 if (timeoutMs === 0 || tooSoon) {
-                    return GestureDirection.None
+                    //return GestureDirection.None
                 }
             }
 

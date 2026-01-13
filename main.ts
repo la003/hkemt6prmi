@@ -174,243 +174,234 @@ namespace MT6PrHKEMi {
     //SCHRITTMOTOR
 
     //FARBSENSOR
-        // I2C & Registerdefinitionen
-        const I2C_ADDR = 0x39
-        const REG_ENABLE = 0x80
-        const REG_ATIME = 0x81
-        const REG_STATUS = 0x93
-        const REG_CDATA_L = 0x94
-        const REG_RDATA_L = 0x96
-        const REG_GDATA_L = 0x98
-        const REG_BDATA_L = 0x9A
-        const REG_PDATA = 0x9C
-        const REG_CONFIG2 = 0x90
+    // I2C & Registerdefinitionen
+    const I2C_ADDR = 0x39
+    const REG_ENABLE = 0x80
+    const REG_ATIME = 0x81
+    const REG_STATUS = 0x93
+    const REG_CDATA_L = 0x94
+    const REG_RDATA_L = 0x96
+    const REG_GDATA_L = 0x98
+    const REG_BDATA_L = 0x9A
+    const REG_PDATA = 0x9C
+    const REG_CONFIG2 = 0x90
 
-        // Gesture-Konfiguration
-        const REG_GPENTH = 0xA0
-        const REG_GEXTH = 0xA1
-        const REG_GCONF1 = 0xA2
-        const REG_GCONF2 = 0xA3
-        const REG_GO_U = 0xA4
-        const REG_GO_D = 0xA5
-        const REG_GPULSE = 0xA6
-        const REG_GO_L = 0xA7
-        const REG_GCONF3 = 0xAA
-        const REG_GCONF4 = 0xAB
-        const REG_GFLVL = 0xAE
-        const REG_GSTATUS = 0xAF
-        const REG_GFIFO_U = 0xFC
-        const REG_GFIFO_D = 0xFD
-        const REG_GFIFO_L = 0xFE
-        const REG_GFIFO_R = 0xFF
+    // Gesture-Konfiguration
+    const REG_GPENTH = 0xA0
+    const REG_GEXTH = 0xA1
+    const REG_GCONF1 = 0xA2
+    const REG_GCONF2 = 0xA3
+    const REG_GO_U = 0xA4
+    const REG_GO_D = 0xA5
+    const REG_GPULSE = 0xA6
+    const REG_GO_L = 0xA7
+    const REG_GCONF3 = 0xAA
+    const REG_GCONF4 = 0xAB
+    const REG_GFLVL = 0xAE
+    const REG_GSTATUS = 0xAF
+    const REG_GFIFO_U = 0xFC
+    const REG_GFIFO_D = 0xFD
+    const REG_GFIFO_L = 0xFE
+    const REG_GFIFO_R = 0xFF
 
-        // ENABLE-Bits
-        const PON = 0x01
-        const AEN = 0x02
-        const PEN = 0x04
-        const GEN = 0x40
+    // ENABLE-Bits
+    const PON = 0x01
+    const AEN = 0x02
+    const PEN = 0x04
+    const GEN = 0x40
 
-        // I2C Helfer
-        function write8(reg: number, value: number) {
-            const buf = pins.createBuffer(2)
-            buf[0] = reg
-            buf[1] = value & 0xFF
-            pins.i2cWriteBuffer(I2C_ADDR, buf)
+    // I2C Helfer
+    function write8(reg: number, value: number) {
+        const buf = pins.createBuffer(2)
+        buf[0] = reg
+        buf[1] = value & 0xFF
+        pins.i2cWriteBuffer(I2C_ADDR, buf)
+    }
+    function read8(reg: number): number {
+        pins.i2cWriteNumber(I2C_ADDR, reg, NumberFormat.UInt8BE)
+        return pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt8BE) & 0xFF
+    }
+    function read16LE(loReg: number): number {
+        const lo = read8(loReg)
+        const hi = read8(loReg + 1)
+        return (hi << 8) | lo
+    }
+
+    // Gesten-Enums & Filter
+    export enum GestureDirection {
+        //% block="keine"
+        None = 0,
+        //% block="hoch"
+        Up = 1,
+        //% block="runter"
+        Down = 2,
+        //% block="links"
+        Left = 3,
+        //% block="rechts"
+        Right = 4,
+    }
+
+    const _ENERGY_MIN = 60 // Mindestenergie in FIFO (Summe U+D+L+R)
+    const _TH = 25 // Deadband für Differenzen U-D / L-R
+
+    // Emissionszustände (für Wiederholung/Timeout-Optionen)
+    let _lastGestureEmitted: GestureDirection = GestureDirection.None
+    let _lastGestureTimestamp = 0
+    let _lastTextEmitted = "" // "UP/DOWN/LEFT/RIGHT" oder "" (keine)
+    let _lastTextTimestamp = 0
+
+    // Interner Power/Init-Status
+    let _isPoweredOn = false
+
+    // Initialisierung
+    function initStableBalanced() {
+        // ALS-Integrationszeit (~103 ms)
+        write8(REG_ATIME, 219)
+
+        // LEDBOOST moderat: 2x
+        let c2 = read8(REG_CONFIG2)
+        c2 = (c2 & 0xCF) | 0x10  // Bits 5:4 = 01 => 2x
+        write8(REG_CONFIG2, c2)
+
+        // Gesture: ausgewogene Startwerte (fix)
+        write8(REG_GCONF1, 0b01000000)                                 // GFIFOTH=01 (8 Datensätze)
+        write8(REG_GCONF2, (0b10 << 5) | (0b01 << 3) | 0b010)          // GGAIN=4x, GLDRIVE=50mA, GWTIME=5.6ms
+        write8(REG_GPULSE, (0b01 << 6) | 16)                           // GPLEN=16µs, GPULSE=16
+        write8(REG_GO_U, 0x00); write8(REG_GO_D, 0x00); write8(REG_GO_L, 0x00) // Offsets 0
+        write8(REG_GCONF3, 0x00)                                       // alle Dimensionen
+        write8(REG_GPENTH, 0x18)                                       // Entry ~24
+        write8(REG_GEXTH, 0x0C)                                        // Exit  ~12
+
+        // GIEN + GMODE aktivieren und FIFO leeren
+        let g4 = read8(REG_GCONF4)
+        g4 |= 0x03 // GIEN + GMODE
+        write8(REG_GCONF4, g4)
+        clearGestureFIFO()
+    }
+
+    function setGestureMode(on: boolean) {
+        let v = read8(REG_GCONF4)
+        v = on ? (v | 0x02) : (v & ~0x02) // GIEN
+        v = on ? (v | 0x01) : (v & ~0x01) // GMODE
+        write8(REG_GCONF4, v)
+    }
+
+    function clearGestureFIFO() {
+        let v = read8(REG_GCONF4)
+        write8(REG_GCONF4, v | 0x04)   // GFIFO_CLR setzen
+        write8(REG_GCONF4, v & ~0x04)  // wieder löschen
+    }
+
+    function waitALSValid(timeoutMs = 60): boolean {
+        const start = control.millis()
+        while (control.millis() - start < timeoutMs) {
+            const st = read8(REG_STATUS)
+            const avalid = (st & 0x01) != 0 // AVALID Bit0
+            if (avalid) return true
+            basic.pause(2)
         }
-        function read8(reg: number): number {
-            pins.i2cWriteNumber(I2C_ADDR, reg, NumberFormat.UInt8BE)
-            return pins.i2cReadNumber(I2C_ADDR, NumberFormat.UInt8BE) & 0xFF
+        return false
+    }
+
+    function ensurePoweredOn(): void {
+        if (_isPoweredOn) return
+
+        initStableBalanced()
+        write8(REG_ENABLE, PON | AEN | PEN | GEN)
+        setGestureMode(true)
+        clearGestureFIFO()
+
+        // Emissions-Zustände zurücksetzen (nur beim Einschalten)
+        _lastGestureEmitted = GestureDirection.None
+        _lastGestureTimestamp = 0
+        _lastTextEmitted = ""
+        _lastTextTimestamp = 0
+
+        _isPoweredOn = true
+
+    }
+
+
+    // Helligkeit lesen
+    //% block="Helligkeit lesen" group="Farbsensor" weight=92
+    export function readBrightness(): number {
+        ensurePoweredOn()
+        waitALSValid(60)
+        return read16LE(REG_CDATA_L)
+    }
+
+    // Rot lesen
+    //% block="Rot lesen" group="Farbsensor" weight=91 color=#E74C3C
+    export function readRed(): number {
+        ensurePoweredOn()
+        waitALSValid(60)
+        return read16LE(REG_RDATA_L)
+    }
+
+    // Grün lesen
+    //% block="Grün lesen" group="Farbsensor" weight=90 color=#27AE60
+    export function readGreen(): number {
+        ensurePoweredOn()
+        waitALSValid(60)
+        return read16LE(REG_GDATA_L)
+    }
+
+    // Blau lesen
+    //% block="Blau lesen" group="Farbsensor" weight=89 color=#2980B9
+    export function readBlue(): number {
+        ensurePoweredOn()
+        waitALSValid(60)
+        return read16LE(REG_BDATA_L)
+    }
+
+    // Abstand lesen
+    //% block="Abstand lesen" group="Farbsensor" weight=87
+    export function readDistance(): number {
+        ensurePoweredOn()
+        return read8(REG_PDATA)
+    }
+
+    // Interne Roh-Gestenerkennung (Rauschfilter + Dominanz der Achse)
+    function detectGestureRaw(): GestureDirection {
+        // GVALID prüfen
+        const gstat = read8(REG_GSTATUS)
+        const gvalid = (gstat & 0x01) != 0
+        if (!gvalid) return GestureDirection.None
+
+        // FIFO-Level
+        const level = read8(REG_GFLVL)
+        if (level <= 0) return GestureDirection.None
+
+        // Summen bilden
+        let sumU = 0, sumD = 0, sumL = 0, sumR = 0
+        for (let i = 0; i < level; i++) {
+            sumU += read8(REG_GFIFO_U)
+            sumD += read8(REG_GFIFO_D)
+            sumL += read8(REG_GFIFO_L)
+            sumR += read8(REG_GFIFO_R)
         }
-        function read16LE(loReg: number): number {
-            const lo = read8(loReg)
-            const hi = read8(loReg + 1)
-            return (hi << 8) | lo
+        clearGestureFIFO()
+
+        // Mindestenergie-Filter
+        const energy = sumU + sumD + sumL + sumR
+        if (energy < _ENERGY_MIN) return GestureDirection.None
+
+        const diffUD = sumU - sumD
+        const diffLR = sumL - sumR
+
+        // Dominante Achse entscheidet
+        if (Math.abs(diffUD) >= Math.abs(diffLR)) {
+            if (diffUD > _TH) return GestureDirection.Up
+            if (diffUD < -_TH) return GestureDirection.Down
+        } else {
+            if (diffLR > _TH) return GestureDirection.Left
+            if (diffLR < -_TH) return GestureDirection.Right
         }
-
-        // Gesten-Enums & Filter
-        export enum GestureDirection {
-            //% block="keine"
-            None = 0,
-            //% block="hoch"
-            Up = 1,
-            //% block="runter"
-            Down = 2,
-            //% block="links"
-            Left = 3,
-            //% block="rechts"
-            Right = 4,
-        }
-
-        const _ENERGY_MIN = 60 // Mindestenergie in FIFO (Summe U+D+L+R)
-        const _TH = 25 // Deadband für Differenzen U-D / L-R
-
-        // Emissionszustände (für Wiederholung/Timeout-Optionen)
-        let _lastGestureEmitted: GestureDirection = GestureDirection.None
-        let _lastGestureTimestamp = 0
-        let _lastTextEmitted = "" // "UP/DOWN/LEFT/RIGHT" oder "" (keine)
-        let _lastTextTimestamp = 0
-
-        // Interner Power/Init-Status
-        let _isPoweredOn = false
-
-        // Initialisierung
-        function initStableBalanced() {
-            // ALS-Integrationszeit (~103 ms)
-            write8(REG_ATIME, 219)
-
-            // LEDBOOST moderat: 2x
-            let c2 = read8(REG_CONFIG2)
-            c2 = (c2 & 0xCF) | 0x10  // Bits 5:4 = 01 => 2x
-            write8(REG_CONFIG2, c2)
-
-            // Gesture: ausgewogene Startwerte (fix)
-            write8(REG_GCONF1, 0b01000000)                                 // GFIFOTH=01 (8 Datensätze)
-            write8(REG_GCONF2, (0b10 << 5) | (0b01 << 3) | 0b010)          // GGAIN=4x, GLDRIVE=50mA, GWTIME=5.6ms
-            write8(REG_GPULSE, (0b01 << 6) | 16)                           // GPLEN=16µs, GPULSE=16
-            write8(REG_GO_U, 0x00); write8(REG_GO_D, 0x00); write8(REG_GO_L, 0x00) // Offsets 0
-            write8(REG_GCONF3, 0x00)                                       // alle Dimensionen
-            write8(REG_GPENTH, 0x18)                                       // Entry ~24
-            write8(REG_GEXTH, 0x0C)                                        // Exit  ~12
-
-            // GIEN + GMODE aktivieren und FIFO leeren
-            let g4 = read8(REG_GCONF4)
-            g4 |= 0x03 // GIEN + GMODE
-            write8(REG_GCONF4, g4)
-            clearGestureFIFO()
-        }
-
-        function setGestureMode(on: boolean) {
-            let v = read8(REG_GCONF4)
-            v = on ? (v | 0x02) : (v & ~0x02) // GIEN
-            v = on ? (v | 0x01) : (v & ~0x01) // GMODE
-            write8(REG_GCONF4, v)
-        }
-
-        function clearGestureFIFO() {
-            let v = read8(REG_GCONF4)
-            write8(REG_GCONF4, v | 0x04)   // GFIFO_CLR setzen
-            write8(REG_GCONF4, v & ~0x04)  // wieder löschen
-        }
-
-        function waitALSValid(timeoutMs = 60): boolean {
-            const start = control.millis()
-            while (control.millis() - start < timeoutMs) {
-                const st = read8(REG_STATUS)
-                const avalid = (st & 0x01) != 0 // AVALID Bit0
-                if (avalid) return true
-                basic.pause(2)
-            }
-            return false
-        }
-
-        // ---------------------------------------------------------
-        // NEU: Sicherstellen, dass der Sensor eingeschaltet ist
-        // (idempotent; init nur beim ersten Aufruf)
-        // ---------------------------------------------------------
-        function ensurePoweredOn(): void {
-            if (_isPoweredOn) return
-
-            initStableBalanced()
-            write8(REG_ENABLE, PON | AEN | PEN | GEN)
-            setGestureMode(true)
-            clearGestureFIFO()
-
-            // Emissions-Zustände zurücksetzen (nur beim Einschalten)
-            _lastGestureEmitted = GestureDirection.None
-            _lastGestureTimestamp = 0
-            _lastTextEmitted = ""
-            _lastTextTimestamp = 0
-
-            _isPoweredOn = true
-
-            // Optional: beim ersten Lesen länger warten (wenn nötig)
-            // waitALSValid(120)
-        }
-
-        // ---------------------------------------------------------
-        // Öffentliche API (alle rufen ensurePoweredOn() am Anfang)
-        // ---------------------------------------------------------
-
-        // Helligkeit lesen
-        //% block="Helligkeit lesen" group="Farbsensor" weight=92
-        export function readBrightness(): number {
-            ensurePoweredOn()
-            waitALSValid(60)
-            return read16LE(REG_CDATA_L)
-        }
-
-        // Rot lesen
-        //% block="Rot lesen" group="Farbsensor" weight=91 color=#E74C3C
-        export function readRed(): number {
-            ensurePoweredOn()
-            waitALSValid(60)
-            return read16LE(REG_RDATA_L)
-        }
-
-        // Grün lesen
-        //% block="Grün lesen" group="Farbsensor" weight=90 color=#27AE60
-        export function readGreen(): number {
-            ensurePoweredOn()
-            waitALSValid(60)
-            return read16LE(REG_GDATA_L)
-        }
-
-        // Blau lesen
-        //% block="Blau lesen" group="Farbsensor" weight=89 color=#2980B9
-        export function readBlue(): number {
-            ensurePoweredOn()
-            waitALSValid(60)
-            return read16LE(REG_BDATA_L)
-        }
-
-        // Abstand lesen
-        //% block="Abstand lesen" group="Farbsensor" weight=87
-        export function readDistance(): number {
-            ensurePoweredOn()
-            return read8(REG_PDATA)
-        }
-
-        // Interne Roh-Gestenerkennung (Rauschfilter + Dominanz der Achse)
-        function detectGestureRaw(): GestureDirection {
-            // GVALID prüfen
-            const gstat = read8(REG_GSTATUS)
-            const gvalid = (gstat & 0x01) != 0
-            if (!gvalid) return GestureDirection.None
-
-            // FIFO-Level
-            const level = read8(REG_GFLVL)
-            if (level <= 0) return GestureDirection.None
-
-            // Summen bilden
-            let sumU = 0, sumD = 0, sumL = 0, sumR = 0
-            for (let i = 0; i < level; i++) {
-                sumU += read8(REG_GFIFO_U)
-                sumD += read8(REG_GFIFO_D)
-                sumL += read8(REG_GFIFO_L)
-                sumR += read8(REG_GFIFO_R)
-            }
-            clearGestureFIFO()
-
-            // Mindestenergie-Filter
-            const energy = sumU + sumD + sumL + sumR
-            if (energy < _ENERGY_MIN) return GestureDirection.None
-
-            const diffUD = sumU - sumD
-            const diffLR = sumL - sumR
-
-            // Dominante Achse entscheidet
-            if (Math.abs(diffUD) >= Math.abs(diffLR)) {
-                if (diffUD > _TH) return GestureDirection.Up
-                if (diffUD < -_TH) return GestureDirection.Down
-            } else {
-                if (diffLR > _TH) return GestureDirection.Left
-                if (diffLR < -_TH) return GestureDirection.Right
-            }
-            return GestureDirection.None
+        return GestureDirection.None
         }
 
         /**
-         * Geste (Enum) – funktioniert wie bisher.
+         * Geste (Enum)
          * Zusätzlich: Wiederholung und Timeout einstellbar.
          *
          * @param repeat    true = gleiche Geste darf direkt erneut ausgegeben werden

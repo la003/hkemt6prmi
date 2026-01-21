@@ -173,6 +173,35 @@ namespace MT6PrHKEMi {
     }
     //SCHRITTMOTOR
 
+    //Helligkeitssensor
+    export enum HelligkeitssensorAdresse {
+        //% block="Helligkeitssensor_1"
+        Helligkeitssensor1 = 0x05,
+        //% block="Helligkeitssensor_2"
+        Helligkeitssensor2 = 0x15,
+        //% block="Helligkeitssensor_3"
+        Helligkeitssensor3 = 0x25,
+        //% block="Helligkeitssensor_4"
+        Helligkeitssensor4 = 0x35,
+        //% block="Helligkeitssensor_5"
+        Helligkeitssensor5 = 0x45,
+        //% block="Helligkeitssensor_6"
+        Helligkeitssensor6 = 0x55,
+        //% block="Helligkeitssensor_7"
+        Helligkeitssensor7 = 0x65,
+        //% block="Helligkeitssensor_8"
+        Helligkeitssensor8 = 0x75,
+    }
+    //% block="Messwert %adresse"
+    //% group="Helligkeitssensor"
+    //% weight=99 blockGap=16
+    //% adresse.defl=HelligkeitssensorAdresse.Helligkeitssensor1
+    export function Helligkeitssensor_Abfrage(adresse: HelligkeitssensorAdresse): Number {
+        let Messwert = pins.i2cReadNumber(adresse, NumberFormat.UInt8LE )
+        return Messwert
+    }
+    //Helligkeitssensor
+
     //FARBSENSOR
     // I2C & Registerdefinitionen
     const I2C_ADDR = 0x39

@@ -196,7 +196,7 @@ namespace MT6PrHKEMi {
     //% group="Helligkeitssensor"
     //% weight=99 blockGap=16
     //% adresse.defl=HelligkeitssensorAdresse.Helligkeitssensor1
-    export function Helligkeitssensor_Abfrage(adresse: HelligkeitssensorAdresse): Number {
+    export function Helligkeitssensor_Abfrage(adresse: HelligkeitssensorAdresse): number {
         let Messwert = pins.i2cReadNumber(adresse, NumberFormat.UInt8LE )
         return Messwert
     }

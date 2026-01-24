@@ -136,7 +136,7 @@ namespace MT6PrHKEMi {
     }
     //GLEICHSTROMMOTOR
 
-    //SCHRITTMOTOR
+    //SCHRITTMOTOR //noch nicht existent
     //export enum SchrittmotorAdresse {
         //% block="Schrittmotor_1"
         //Schrittmotor1 = 0x0D,
@@ -155,12 +155,12 @@ namespace MT6PrHKEMi {
         //% block="Schrittmotor_8"
         //Schrittmotor8 = 0x7D,
     //}
-    //% block="Bewege %adresse mit %geschwindigkeit °/s um %positionsaenderung Grad"
-    //% group="Schrittmotor"
-    //% weight=99 blockGap=16
-    //% adresse.defl=SchrittmotorAdresse.Schrittmotor1
+    ////% block="Bewege %adresse mit %geschwindigkeit °/s um %positionsaenderung Grad"
+    ////% group="Schrittmotor"
+    ////% weight=99 blockGap=16
+    ////% adresse.defl=SchrittmotorAdresse.Schrittmotor1
     //% geschwindigkeit.min=0 geschwindigkeit.max=20
-    //% positionsaenderung.min=-180 positionsaenderung.max=180
+    ////% positionsaenderung.min=-180 positionsaenderung.max=180
     //export function schrittmotorbewegen(adresse: SchrittmotorAdresse, geschwindigkeit: number, positionsaenderung: number) {
 
         // Buffer mit 2 Byte: [Geschwindigkeit, Positionsaenderung]
